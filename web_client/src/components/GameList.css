@@ -1,0 +1,83 @@
+.game-list {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.game-list h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+  color: #2c3e50;
+}
+
+.game-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.no-games {
+  color: #7f8c8d;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.game-item {
+  padding: 1rem;
+  border: 2px solid #ecf0f1;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.game-item:hover {
+  border-color: #3498db;
+  background-color: #f8f9fa;
+}
+
+.game-item.selected {
+  border-color: #3498db;
+  background-color: #e3f2fd;
+}
+
+.game-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.game-id {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.game-status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-waiting {
+  background-color: #f39c12;
+  color: white;
+}
+
+.status-active {
+  background-color: #27ae60;
+  color: white;
+}
+
+.status-finished {
+  background-color: #7f8c8d;
+  color: white;
+}
+
+.game-details {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}

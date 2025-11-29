@@ -1,0 +1,26 @@
+# Binaries
+server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output
+*.out
+
+# Go workspace file
+go.work
+
+# Coverage
+coverage.out
+*.coverprofile
+
+# Dependencies
+vendor/
+
+# Build directories
+bin/
+dist/

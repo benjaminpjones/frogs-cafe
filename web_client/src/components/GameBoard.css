@@ -1,0 +1,58 @@
+.game-board {
+  width: 100%;
+}
+
+.game-header {
+  margin-bottom: 2rem;
+}
+
+.game-header h2 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+}
+
+.game-meta {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.game-meta .status {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+}
+
+.game-meta .status-waiting {
+  background-color: #f39c12;
+  color: white;
+}
+
+.game-meta .status-active {
+  background-color: #27ae60;
+  color: white;
+}
+
+.game-meta .status-finished {
+  background-color: #7f8c8d;
+  color: white;
+}
+
+.board-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem 0;
+}
+
+.board-canvas {
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  border-radius: 4px;
+}
+
+.board-canvas:hover {
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+}
