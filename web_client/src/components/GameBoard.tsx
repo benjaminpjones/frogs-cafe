@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Game } from '../types';
-import './GameBoard.css';
+import React, { useEffect, useState } from "react";
+import { Game } from "../types";
+import "./GameBoard.css";
 
 interface GameBoardProps {
   game: Game;
@@ -9,9 +9,12 @@ interface GameBoardProps {
 const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const [board, setBoard] = useState<(string | null)[][]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+  const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080";
+  const cellSize = 30;
+  const padding = 20;
+  const boardSize = game.board_size;
+  const svgSize = (boardSize - 1) * cellSize + padding * 2;
 
   useEffect(() => {
     // Initialize empty board
@@ -21,24 +24,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     setBoard(newBoard);
 
     // Connect to WebSocket
-    const websocket = new WebSocket(`${WS_URL}/ws?game_id=${game.id}&user_id=1`);
-    
+    const websocket = new WebSocket(
+      `${WS_URL}/ws?game_id=${game.id}&user_id=1`,
+    );
+
     websocket.onopen = () => {
-      console.log('WebSocket connected');
+      console.log("WebSocket connected");
     };
 
     websocket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      console.log('Received:', message);
+      console.log("Received:", message);
       // Handle incoming moves
     };
 
     websocket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error("WebSocket error:", error);
     };
 
     websocket.onclose = () => {
-      console.log('WebSocket disconnected');
+      console.log("WebSocket disconnected");
     };
 
     setWs(websocket);
@@ -48,111 +53,131 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     };
   }, [game.id, game.board_size, WS_URL]);
 
-  useEffect(() => {
-    drawBoard();
-  }, [board]);
+  const handleIntersectionClick = (x: number, y: number) => {
+    if (!board[y][x]) {
+      // Send move via WebSocket
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "move",
+            data: { x, y, game_id: game.id },
+          }),
+        );
+      }
 
-  const drawBoard = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+      // Update local board (simplified - should wait for server confirmation)
+      const newBoard = board.map((row) => [...row]);
+      newBoard[y][x] = "black"; // Simplified - should track current player
+      setBoard(newBoard);
+    }
+  };
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const cellSize = 30;
-    const padding = 20;
-    const boardSize = game.board_size;
-    
-    canvas.width = boardSize * cellSize + padding * 2;
-    canvas.height = boardSize * cellSize + padding * 2;
-
-    // Clear canvas
-    ctx.fillStyle = '#DEB887';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw grid lines
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
+  const renderGridLines = () => {
+    const lines = [];
 
     for (let i = 0; i < boardSize; i++) {
       // Vertical lines
-      ctx.beginPath();
-      ctx.moveTo(padding + i * cellSize, padding);
-      ctx.lineTo(padding + i * cellSize, padding + (boardSize - 1) * cellSize);
-      ctx.stroke();
+      lines.push(
+        <line
+          key={`v-${i}`}
+          x1={padding + i * cellSize}
+          y1={padding}
+          x2={padding + i * cellSize}
+          y2={padding + (boardSize - 1) * cellSize}
+          stroke="#000"
+          strokeWidth="1"
+        />,
+      );
 
       // Horizontal lines
-      ctx.beginPath();
-      ctx.moveTo(padding, padding + i * cellSize);
-      ctx.lineTo(padding + (boardSize - 1) * cellSize, padding + i * cellSize);
-      ctx.stroke();
+      lines.push(
+        <line
+          key={`h-${i}`}
+          x1={padding}
+          y1={padding + i * cellSize}
+          x2={padding + (boardSize - 1) * cellSize}
+          y2={padding + i * cellSize}
+          stroke="#000"
+          strokeWidth="1"
+        />,
+      );
     }
 
-    // Draw star points (for 19x19 board)
-    if (boardSize === 19) {
-      const starPoints = [
-        [3, 3], [3, 9], [3, 15],
-        [9, 3], [9, 9], [9, 15],
-        [15, 3], [15, 9], [15, 15]
-      ];
-      
-      starPoints.forEach(([x, y]) => {
-        ctx.beginPath();
-        ctx.arc(padding + x * cellSize, padding + y * cellSize, 4, 0, 2 * Math.PI);
-        ctx.fillStyle = '#000';
-        ctx.fill();
-      });
+    return lines;
+  };
+
+  const renderStarPoints = () => {
+    if (boardSize !== 19) return null;
+
+    const starPoints = [
+      [3, 3],
+      [3, 9],
+      [3, 15],
+      [9, 3],
+      [9, 9],
+      [9, 15],
+      [15, 3],
+      [15, 9],
+      [15, 15],
+    ];
+
+    return starPoints.map(([x, y], idx) => (
+      <circle
+        key={`star-${idx}`}
+        cx={padding + x * cellSize}
+        cy={padding + y * cellSize}
+        r="4"
+        fill="#000"
+      />
+    ));
+  };
+
+  const renderIntersections = () => {
+    const intersections = [];
+
+    for (let y = 0; y < boardSize; y++) {
+      for (let x = 0; x < boardSize; x++) {
+        intersections.push(
+          <circle
+            key={`int-${x}-${y}`}
+            cx={padding + x * cellSize}
+            cy={padding + y * cellSize}
+            r={cellSize * 0.45}
+            fill="transparent"
+            cursor="pointer"
+            onClick={() => handleIntersectionClick(x, y)}
+            className="intersection"
+          />,
+        );
+      }
     }
 
-    // Draw stones
+    return intersections;
+  };
+
+  const renderStones = () => {
+    const stones: JSX.Element[] = [];
+
     board.forEach((row, y) => {
       row.forEach((stone, x) => {
         if (stone) {
-          ctx.beginPath();
-          ctx.arc(
-            padding + x * cellSize,
-            padding + y * cellSize,
-            cellSize * 0.4,
-            0,
-            2 * Math.PI
+          stones.push(
+            <circle
+              key={`stone-${x}-${y}`}
+              cx={padding + x * cellSize}
+              cy={padding + y * cellSize}
+              r={cellSize * 0.4}
+              fill={stone === "black" ? "#000" : "#fff"}
+              stroke="#000"
+              strokeWidth="1"
+              pointerEvents="none"
+            />,
           );
-          ctx.fillStyle = stone === 'black' ? '#000' : '#fff';
-          ctx.fill();
-          ctx.strokeStyle = '#000';
-          ctx.lineWidth = 1;
-          ctx.stroke();
         }
       });
     });
-  };
 
-  const handleBoardClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const cellSize = 30;
-    const padding = 20;
-    
-    const x = Math.round((event.clientX - rect.left - padding) / cellSize);
-    const y = Math.round((event.clientY - rect.top - padding) / cellSize);
-
-    if (x >= 0 && x < game.board_size && y >= 0 && y < game.board_size) {
-      if (!board[y][x]) {
-        // Send move via WebSocket
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'move',
-            data: { x, y, game_id: game.id }
-          }));
-        }
-
-        // Update local board (simplified - should wait for server confirmation)
-        const newBoard = board.map(row => [...row]);
-        newBoard[y][x] = 'black'; // Simplified - should track current player
-        setBoard(newBoard);
-      }
-    }
+    return stones;
   };
 
   return (
@@ -161,15 +186,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         <h2>Game #{game.id}</h2>
         <div className="game-meta">
           <span className={`status status-${game.status}`}>{game.status}</span>
-          <span>Board Size: {game.board_size}×{game.board_size}</span>
+          <span>
+            Board Size: {game.board_size}×{game.board_size}
+          </span>
         </div>
       </div>
       <div className="board-container">
-        <canvas
-          ref={canvasRef}
-          onClick={handleBoardClick}
-          className="board-canvas"
-        />
+        <svg width={svgSize} height={svgSize} className="board-svg">
+          <rect width={svgSize} height={svgSize} fill="#DEB887" />
+          {renderGridLines()}
+          {renderStarPoints()}
+          {renderIntersections()}
+          {renderStones()}
+        </svg>
       </div>
     </div>
   );
