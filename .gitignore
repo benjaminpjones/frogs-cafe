@@ -15,3 +15,6 @@ Thumbs.db
 
 # Docker volumes
 postgres_data/
+
+# Go build artifacts (Air live reload)
+server/tmp/
