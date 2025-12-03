@@ -17,7 +17,41 @@ type Handler struct {
 }
 
 func New(db *database.DB) *Handler {
-	return &Handler{db: db}
+	h := &Handler{db: db}
+	InitHub(h)
+	return h
+}
+
+func (h *Handler) SaveMove(gameIDStr, playerIDStr string, data map[string]interface{}) error {
+	gameID, err := strconv.Atoi(gameIDStr)
+	if err != nil {
+		return err
+	}
+
+	playerID, err := strconv.Atoi(playerIDStr)
+	if err != nil {
+		return err
+	}
+
+	x := int(data["x"].(float64))
+	y := int(data["y"].(float64))
+
+	// Get the current move number
+	var moveNumber int
+	err = h.db.QueryRow(
+		"SELECT COALESCE(MAX(move_number), 0) + 1 FROM moves WHERE game_id = $1",
+		gameID,
+	).Scan(&moveNumber)
+	if err != nil {
+		return err
+	}
+
+	// Insert the move
+	_, err = h.db.Exec(
+		"INSERT INTO moves (game_id, player_id, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
+		gameID, playerID, moveNumber, x, y,
+	)
+	return err
 }
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -173,4 +207,36 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(game)
+}
+
+func (h *Handler) GetGameMoves(w http.ResponseWriter, r *http.Request) {
+	gameID := chi.URLParam(r, "gameID")
+	id, err := strconv.Atoi(gameID)
+	if err != nil {
+		http.Error(w, "Invalid game ID", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := h.db.Query(
+		"SELECT id, game_id, player_id, move_number, x, y, created_at FROM moves WHERE game_id = $1 ORDER BY move_number ASC",
+		id,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var moves []models.Move
+	for rows.Next() {
+		var m models.Move
+		if err := rows.Scan(&m.ID, &m.GameID, &m.PlayerID, &m.MoveNumber, &m.X, &m.Y, &m.CreatedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		moves = append(moves, m)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(moves)
 }

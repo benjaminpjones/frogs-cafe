@@ -9,6 +9,7 @@ interface GameBoardProps {
 const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const [board, setBoard] = useState<(string | null)[][]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
+  const [moveCount, setMoveCount] = useState(0);
 
   const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080";
   const cellSize = 30;
@@ -21,7 +22,24 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     const newBoard = Array(game.board_size)
       .fill(null)
       .map(() => Array(game.board_size).fill(null));
-    setBoard(newBoard);
+
+    // Load existing moves from the server
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+    fetch(`${API_URL}/api/v1/games/${game.id}/moves`)
+      .then((res) => res.json())
+      .then((moves) => {
+        moves.forEach((move: any) => {
+          // Determine color based on move number (odd = black, even = white)
+          const color = move.move_number % 2 === 1 ? "black" : "white";
+          newBoard[move.y][move.x] = color;
+        });
+        setMoveCount(moves.length);
+      })
+      .catch((err) => console.error("Error loading moves:", err))
+      .finally(() => {
+        // Always set the board, even if fetch fails
+        setBoard(newBoard);
+      });
 
     // Connect to WebSocket
     const websocket = new WebSocket(
@@ -35,7 +53,20 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     websocket.onmessage = (event) => {
       const message = JSON.parse(event.data);
       console.log("Received:", message);
-      // Handle incoming moves
+
+      // Handle incoming moves from other players
+      if (message.type === "move" && message.data) {
+        const { x, y } = message.data;
+        setBoard((prevBoard) => {
+          const newBoard = prevBoard.map((row) => [...row]);
+          setMoveCount((prevCount) => {
+            const color = prevCount % 2 === 0 ? "black" : "white";
+            newBoard[y][x] = color;
+            return prevCount + 1;
+          });
+          return newBoard;
+        });
+      }
     };
 
     websocket.onerror = (error) => {
@@ -54,22 +85,29 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   }, [game.id, game.board_size, WS_URL]);
 
   const handleIntersectionClick = (x: number, y: number) => {
-    if (!board[y][x]) {
-      // Send move via WebSocket
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "move",
-            data: { x, y, game_id: game.id },
-          }),
-        );
-      }
-
-      // Update local board (simplified - should wait for server confirmation)
-      const newBoard = board.map((row) => [...row]);
-      newBoard[y][x] = "black"; // Simplified - should track current player
-      setBoard(newBoard);
+    // Check if board is initialized and position is empty
+    if (board.length === 0 || !board[y] || board[y][x]) {
+      return;
     }
+
+    // Determine color based on move count
+    const color = moveCount % 2 === 0 ? "black" : "white";
+
+    // Send move via WebSocket
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "move",
+          data: { x, y, game_id: game.id },
+        }),
+      );
+    }
+
+    // Update local board optimistically
+    const newBoard = board.map((row) => [...row]);
+    newBoard[y][x] = color;
+    setBoard(newBoard);
+    setMoveCount(moveCount + 1);
   };
 
   const renderGridLines = () => {

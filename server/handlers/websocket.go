@@ -31,16 +31,19 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	mutex      sync.RWMutex
+	handler    *Handler
 }
 
-var hub = &Hub{
-	clients:    make(map[*Client]bool),
-	broadcast:  make(chan []byte),
-	register:   make(chan *Client),
-	unregister: make(chan *Client),
-}
+var hub *Hub
 
-func init() {
+func InitHub(h *Handler) {
+	hub = &Hub{
+		clients:    make(map[*Client]bool),
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		handler:    h,
+	}
 	go hub.run()
 }
 
@@ -120,6 +123,15 @@ func (c *Client) readPump() {
 		}
 
 		log.Printf("Received message: %+v", msg)
+
+		// Handle move type messages
+		if msgType, ok := msg["type"].(string); ok && msgType == "move" {
+			if data, ok := msg["data"].(map[string]interface{}); ok {
+				if err := hub.handler.SaveMove(c.gameID, c.userID, data); err != nil {
+					log.Printf("Error saving move: %v", err)
+				}
+			}
+		}
 
 		// Broadcast to all clients in the same game
 		hub.broadcast <- message

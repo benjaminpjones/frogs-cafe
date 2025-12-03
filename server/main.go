@@ -68,6 +68,7 @@ func main() {
 		r.Get("/games", h.ListGames)
 		r.Post("/games", h.CreateGame)
 		r.Get("/games/{gameID}", h.GetGame)
+		r.Get("/games/{gameID}/moves", h.GetGameMoves)
 		
 		// Player routes
 		r.Get("/players", h.ListPlayers)
