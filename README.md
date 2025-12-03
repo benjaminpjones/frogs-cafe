@@ -39,7 +39,7 @@ frogs_cafe/
 
 1. **Start backend services with Docker:**
    ```bash
-   docker-compose -f docker-compose.dev.yml up
+   docker compose -f docker-compose.dev.yml up
    ```
    This starts PostgreSQL and the Go server on `localhost:8080`
 

@@ -1,15 +1,20 @@
-FROM golang:1.21-alpine
+FROM golang:1.23-alpine
 
 WORKDIR /app
 
 RUN apk add --no-cache git
 
-# Install air for hot reload
-RUN go install github.com/cosmtrek/air@latest
+# Install air for hot reload (using a version compatible with Go 1.23)
+RUN go install github.com/air-verse/air@v1.61.0
 
-COPY server/go.mod server/go.sum ./
+# Copy go mod files first for better caching
+COPY server/go.mod server/go.sum* ./
 RUN go mod download
+
+# Copy the entire server directory
+COPY server/ ./
 
 EXPOSE 8080
 
+# Use air for hot reload in development
 CMD ["air", "-c", ".air.toml"]

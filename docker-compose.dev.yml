@@ -33,7 +33,9 @@ services:
         condition: service_healthy
     volumes:
       - ./server:/app
-    command: go run main.go
+      # Persist go modules to avoid re-downloading
+      - go-modules:/go/pkg/mod
 
 volumes:
   postgres_data:
+  go-modules:
