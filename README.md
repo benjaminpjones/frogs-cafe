@@ -93,9 +93,13 @@ This builds the React app into static files and serves them from the Go server a
 ### REST API
 
 - `GET /health` - Health check
+- `POST /api/v1/register` - Register a new user
+- `POST /api/v1/login` - Login with username and password
+- `POST /api/v1/logout` - Logout (invalidates session)
 - `GET /api/v1/games` - List all games
 - `POST /api/v1/games` - Create a new game
 - `GET /api/v1/games/{gameID}` - Get game details
+- `GET /api/v1/games/{gameID}/moves` - Get all moves for a game
 - `GET /api/v1/players` - List all players
 - `POST /api/v1/players` - Create a new player
 - `GET /api/v1/players/{playerID}` - Get player details
@@ -110,6 +114,7 @@ This builds the React app into static files and serves them from the Go server a
 - `id`: Serial primary key
 - `username`: Unique username
 - `email`: Unique email
+- `password_hash`: Hashed password (bcrypt)
 - `rating`: Player rating (default 1500)
 - `created_at`, `updated_at`: Timestamps
 
@@ -127,6 +132,14 @@ This builds the React app into static files and serves them from the Go server a
 - `player_id`: Player reference
 - `move_number`: Sequential move number
 - `x`, `y`: Board coordinates
+- `created_at`: Timestamp
+
+### Sessions Table
+- `id`: Serial primary key
+- `player_id`: Player reference
+- `token`: Unique session token
+- `last_activity`: Last activity timestamp (for sliding window)
+- `expires_at`: Session expiration time
 - `created_at`: Timestamp
 
 ## Development
@@ -151,7 +164,6 @@ npm run build
 
 - `DATABASE_URL`: PostgreSQL connection string
 - `PORT`: Server port (default: 8080)
-- `JWT_SECRET`: Secret key for JWT tokens
 - `ENVIRONMENT`: Environment mode (development/production)
 
 ## Technology Stack
@@ -182,7 +194,7 @@ MIT License
 
 ## Future Enhancements
 
-- [ ] User authentication and authorization
+- [x] User authentication and authorization
 - [ ] Game rules engine (capture, ko, scoring)
 - [ ] Game replay functionality
 - [ ] Chat system

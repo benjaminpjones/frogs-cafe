@@ -1,11 +1,11 @@
-FROM golang:1.23-alpine
+FROM golang:1.24-alpine
 
 WORKDIR /app
 
 RUN apk add --no-cache git
 
-# Install air for hot reload (using a version compatible with Go 1.23)
-RUN go install github.com/air-verse/air@v1.61.0
+# Install air for hot reload (use version compatible with Go 1.24)
+RUN go install github.com/air-verse/air@v1.61.7
 
 # Copy go mod files first for better caching
 COPY server/go.mod server/go.sum* ./

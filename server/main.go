@@ -4,11 +4,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"frogs_cafe/auth"
 	"frogs_cafe/config"
 	"frogs_cafe/database"
 	"frogs_cafe/handlers"
-	"frogs_cafe/middleware"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -37,6 +38,20 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
+	// Start session cleanup goroutine (runs every hour)
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			if err := auth.CleanupExpiredSessions(db.DB); err != nil {
+				log.Printf("Failed to cleanup expired sessions: %v", err)
+			} else {
+				log.Println("Cleaned up expired sessions")
+			}
+		}
+	}()
+
 	// Initialize router
 	r := chi.NewRouter()
 
@@ -44,11 +59,10 @@ func main() {
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
-	r.Use(middleware.CORS())
 
 	// CORS configuration for development
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173"},
+		AllowedOrigins:   []string{"http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -64,6 +78,11 @@ func main() {
 	
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
+		// Auth routes
+		r.Post("/register", h.Register)
+		r.Post("/login", h.Login)
+		r.Post("/logout", h.Logout)
+		
 		// Game routes
 		r.Get("/games", h.ListGames)
 		r.Post("/games", h.CreateGame)

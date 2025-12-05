@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Game } from "../types";
+import { useAuth } from "../contexts/AuthContext";
 import "./GameBoard.css";
 
 interface GameBoardProps {
@@ -10,6 +11,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const [board, setBoard] = useState<(string | null)[][]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [moveCount, setMoveCount] = useState(0);
+  const { token } = useAuth();
 
   const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080";
   const cellSize = 30;
@@ -43,7 +45,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
 
     // Connect to WebSocket
     const websocket = new WebSocket(
-      `${WS_URL}/ws?game_id=${game.id}&user_id=1`,
+      `${WS_URL}/ws?game_id=${game.id}&token=${token}`,
     );
 
     websocket.onopen = () => {

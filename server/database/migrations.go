@@ -10,6 +10,7 @@ func RunMigrations(db *DB) error {
 			id SERIAL PRIMARY KEY,
 			username VARCHAR(255) UNIQUE NOT NULL,
 			email VARCHAR(255) UNIQUE NOT NULL,
+			password_hash VARCHAR(255) NOT NULL,
 			rating INTEGER DEFAULT 1500,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -35,6 +36,17 @@ func RunMigrations(db *DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_games_status ON games(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_moves_game_id ON moves(game_id)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			id SERIAL PRIMARY KEY,
+			player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			token VARCHAR(255) UNIQUE NOT NULL,
+			last_activity TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			expires_at TIMESTAMP NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_player_id ON sessions(player_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 	}
 
 	for i, migration := range migrations {

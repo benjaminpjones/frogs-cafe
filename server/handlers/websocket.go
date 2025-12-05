@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 
+	"frogs_cafe/auth"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -19,10 +21,11 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	conn   *websocket.Conn
-	send   chan []byte
-	gameID string
-	userID string
+	conn     *websocket.Conn
+	send     chan []byte
+	gameID   string
+	userID   string
+	playerID int
 }
 
 type Hub struct {
@@ -81,6 +84,27 @@ func (h *Hub) run() {
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Get token from query parameter or header
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			token = authHeader[7:]
+		}
+	}
+
+	if token == "" {
+		http.Error(w, "Unauthorized: no token provided", http.StatusUnauthorized)
+		return
+	}
+
+	// Validate session token
+	playerID, username, err := auth.ValidateSession(h.db.DB, token)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
@@ -88,10 +112,11 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &Client{
-		conn:   conn,
-		send:   make(chan []byte, 256),
-		gameID: r.URL.Query().Get("game_id"),
-		userID: r.URL.Query().Get("user_id"),
+		conn:     conn,
+		send:     make(chan []byte, 256),
+		gameID:   r.URL.Query().Get("game_id"),
+		userID:   username,
+		playerID: playerID,
 	}
 
 	hub.register <- client
@@ -127,7 +152,8 @@ func (c *Client) readPump() {
 		// Handle move type messages
 		if msgType, ok := msg["type"].(string); ok && msgType == "move" {
 			if data, ok := msg["data"].(map[string]interface{}); ok {
-				if err := hub.handler.SaveMove(c.gameID, c.userID, data); err != nil {
+				// Use authenticated playerID from JWT, not from message
+				if err := hub.handler.SaveMove(c.gameID, c.playerID, data); err != nil {
 					log.Printf("Error saving move: %v", err)
 				}
 			}

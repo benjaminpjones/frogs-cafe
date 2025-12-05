@@ -32,3 +32,19 @@ export interface WebSocketMessage {
   type: 'move' | 'join' | 'leave' | 'chat';
   data: any;
 }
+
+export interface AuthResponse {
+  token: string;
+  player: Player;
+}
+
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}

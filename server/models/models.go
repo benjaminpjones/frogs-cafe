@@ -5,12 +5,13 @@ import (
 )
 
 type Player struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	Rating    int       `json:"rating"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           int       `json:"id"`
+	Username     string    `json:"username"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"` // Never send password hash in JSON
+	Rating       int       `json:"rating"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type Game struct {
@@ -50,4 +51,20 @@ type MakeMoveRequest struct {
 	PlayerID int `json:"player_id"`
 	X        int `json:"x"`
 	Y        int `json:"y"`
+}
+
+type RegisterRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type AuthResponse struct {
+	Token  string `json:"token"`
+	Player Player `json:"player"`
 }

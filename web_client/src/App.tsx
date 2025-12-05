@@ -2,18 +2,23 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import GameList from './components/GameList';
 import GameBoard from './components/GameBoard';
+import { Auth } from "./components/Auth";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { Game } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-function App() {
+function AppContent() {
   const [games, setGames] = useState<Game[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
+  const { player, logout, isLoading } = useAuth();
 
   useEffect(() => {
-    fetchGames();
-  }, []);
+    if (player) {
+      fetchGames();
+    }
+  }, [player]);
 
   const fetchGames = async () => {
     try {
@@ -22,7 +27,7 @@ function App() {
       setGames(data || []);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching games:', error);
+      console.error("Error fetching games:", error);
       setLoading(false);
     }
   };
@@ -30,9 +35,9 @@ function App() {
   const createNewGame = async () => {
     try {
       const response = await fetch(`${API_URL}/api/v1/games`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           board_size: 19,
@@ -42,17 +47,33 @@ function App() {
       setGames([newGame, ...games]);
       setSelectedGame(newGame);
     } catch (error) {
-      console.error('Error creating game:', error);
+      console.error("Error creating game:", error);
     }
   };
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!player) {
+    return <Auth />;
+  }
 
   return (
     <div className="App">
       <header className="App-header">
         <h1>🐸 Frogs Café - Go Server</h1>
         <p>Play the ancient game of Go (Baduk/Weiqi)</p>
+        <div className="user-info">
+          <span>
+            Welcome, {player.username}! (Rating: {player.rating})
+          </span>
+          <button onClick={logout} className="logout-btn">
+            Logout
+          </button>
+        </div>
       </header>
-      
+
       <main className="App-main">
         <div className="sidebar">
           <button onClick={createNewGame} className="create-game-btn">
@@ -61,14 +82,14 @@ function App() {
           {loading ? (
             <p>Loading games...</p>
           ) : (
-            <GameList 
-              games={games} 
+            <GameList
+              games={games}
               selectedGame={selectedGame}
               onSelectGame={setSelectedGame}
             />
           )}
         </div>
-        
+
         <div className="game-area">
           {selectedGame ? (
             <GameBoard game={selectedGame} />
@@ -80,6 +101,14 @@ function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
