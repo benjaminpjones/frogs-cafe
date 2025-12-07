@@ -6,9 +6,29 @@ interface GameListProps {
   games: Game[];
   selectedGame: Game | null;
   onSelectGame: (game: Game) => void;
+  onJoinGame: (gameId: number) => void;
+  currentPlayerId: number;
 }
 
-const GameList: React.FC<GameListProps> = ({ games, selectedGame, onSelectGame }) => {
+const GameList: React.FC<GameListProps> = ({
+  games,
+  selectedGame,
+  onSelectGame,
+  onJoinGame,
+  currentPlayerId,
+}) => {
+  const canJoinGame = (game: Game) => {
+    return game.status === "waiting" && game.creator_id !== currentPlayerId;
+  };
+
+  const isMyGame = (game: Game) => {
+    return (
+      game.creator_id === currentPlayerId ||
+      game.black_player_id === currentPlayerId ||
+      game.white_player_id === currentPlayerId
+    );
+  };
+
   return (
     <div className="game-list">
       <h2>Games</h2>
@@ -19,7 +39,9 @@ const GameList: React.FC<GameListProps> = ({ games, selectedGame, onSelectGame }
           {games.map((game) => (
             <li
               key={game.id}
-              className={`game-item ${selectedGame?.id === game.id ? 'selected' : ''}`}
+              className={`game-item ${
+                selectedGame?.id === game.id ? "selected" : ""
+              } ${isMyGame(game) ? "my-game" : ""}`}
               onClick={() => onSelectGame(game)}
             >
               <div className="game-info">
@@ -29,8 +51,24 @@ const GameList: React.FC<GameListProps> = ({ games, selectedGame, onSelectGame }
                 </span>
               </div>
               <div className="game-details">
-                <span>Board: {game.board_size}×{game.board_size}</span>
+                <span>
+                  Board: {game.board_size}×{game.board_size}
+                </span>
+                {isMyGame(game) && (
+                  <span className="my-game-badge">Your Game</span>
+                )}
               </div>
+              {canJoinGame(game) && (
+                <button
+                  className="join-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onJoinGame(game.id);
+                  }}
+                >
+                  Join Game
+                </button>
+              )}
             </li>
           ))}
         </ul>

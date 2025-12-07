@@ -12,8 +12,9 @@ export interface Game {
   black_player_id: number | null;
   white_player_id: number | null;
   board_size: number;
-  status: 'waiting' | 'active' | 'finished';
+  status: "waiting" | "active" | "finished";
   winner_id: number | null;
+  creator_id: number | null;
   created_at: string;
   updated_at: string;
 }

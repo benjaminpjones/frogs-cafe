@@ -80,4 +80,42 @@
 .game-details {
   font-size: 0.9rem;
   color: #7f8c8d;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.my-game-badge {
+  background-color: #3498db;
+  color: white;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.game-item.my-game {
+  border-left: 4px solid #3498db;
+}
+
+.join-btn {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.join-btn:hover {
+  background-color: #229954;
+}
+
+.join-btn:active {
+  background-color: #1e8449;
 }

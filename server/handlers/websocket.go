@@ -155,11 +155,27 @@ func (c *Client) readPump() {
 				// Use authenticated playerID from JWT, not from message
 				if err := hub.handler.SaveMove(c.gameID, c.playerID, data); err != nil {
 					log.Printf("Error saving move: %v", err)
+					continue
 				}
+				
+				// Add the authenticated player_id to the data before broadcasting
+				data["player_id"] = float64(c.playerID) // JSON numbers are float64
+				msg["data"] = data
+				
+				// Re-marshal the updated message
+				updatedMessage, err := json.Marshal(msg)
+				if err != nil {
+					log.Printf("Error marshaling updated message: %v", err)
+					continue
+				}
+				
+				// Broadcast the updated message to all clients in the same game
+				hub.broadcast <- updatedMessage
+				continue
 			}
 		}
 
-		// Broadcast to all clients in the same game
+		// For other message types, broadcast as-is
 		hub.broadcast <- message
 	}
 }

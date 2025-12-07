@@ -10,6 +10,7 @@ import (
 	"frogs_cafe/config"
 	"frogs_cafe/database"
 	"frogs_cafe/handlers"
+	"frogs_cafe/middleware"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -83,11 +84,17 @@ func main() {
 		r.Post("/login", h.Login)
 		r.Post("/logout", h.Logout)
 		
-		// Game routes
+		// Public game routes (no auth required)
 		r.Get("/games", h.ListGames)
-		r.Post("/games", h.CreateGame)
 		r.Get("/games/{gameID}", h.GetGame)
 		r.Get("/games/{gameID}/moves", h.GetGameMoves)
+		
+		// Protected game routes (require authentication)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth(db.DB))
+			r.Post("/games", h.CreateGame)
+			r.Post("/games/{gameID}/join", h.JoinGame)
+		})
 		
 		// Player routes
 		r.Get("/players", h.ListPlayers)

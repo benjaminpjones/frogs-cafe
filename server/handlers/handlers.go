@@ -9,6 +9,7 @@ import (
 
 	"frogs_cafe/auth"
 	"frogs_cafe/database"
+	"frogs_cafe/middleware"
 	"frogs_cafe/models"
 
 	"github.com/go-chi/chi/v5"
@@ -131,7 +132,20 @@ func (h *Handler) GetPlayer(w http.ResponseWriter, r *http.Request) {
 
 // Game handlers
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("SELECT id, black_player_id, white_player_id, board_size, status, winner_id, created_at, updated_at FROM games ORDER BY created_at DESC")
+	// Support filtering by status query parameter
+	status := r.URL.Query().Get("status")
+	
+	var query string
+	var args []interface{}
+	
+	if status != "" {
+		query = "SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE status = $1 ORDER BY created_at DESC"
+		args = append(args, status)
+	} else {
+		query = "SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games ORDER BY created_at DESC"
+	}
+	
+	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -141,7 +155,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	var games []models.Game
 	for rows.Next() {
 		var g models.Game
-		if err := rows.Scan(&g.ID, &g.BlackPlayerID, &g.WhitePlayerID, &g.BoardSize, &g.Status, &g.WinnerID, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.BlackPlayerID, &g.WhitePlayerID, &g.BoardSize, &g.Status, &g.WinnerID, &g.CreatorID, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -153,6 +167,13 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
+	// Get the authenticated player ID from context
+	playerID, ok := middleware.GetPlayerID(r)
+	if !ok {
+		http.Error(w, "Unauthorized: Player ID not found", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.CreateGameRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -163,11 +184,13 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		req.BoardSize = 19
 	}
 
+	// Create game without assigning colors yet - colors will be assigned when someone joins
+	// Store creator_id temporarily to track who created the game
 	var game models.Game
 	err := h.db.QueryRow(
-		"INSERT INTO games (black_player_id, white_player_id, board_size) VALUES ($1, $2, $3) RETURNING id, black_player_id, white_player_id, board_size, status, winner_id, created_at, updated_at",
-		req.BlackPlayerID, req.WhitePlayerID, req.BoardSize,
-	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatedAt, &game.UpdatedAt)
+		"INSERT INTO games (black_player_id, white_player_id, board_size, status, creator_id) VALUES (NULL, NULL, $1, 'waiting', $2) RETURNING id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at",
+		req.BoardSize, playerID,
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -176,6 +199,106 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(game)
+}
+
+func (h *Handler) JoinGame(w http.ResponseWriter, r *http.Request) {
+	// Get the authenticated player ID from context
+	joinerID, ok := middleware.GetPlayerID(r)
+	if !ok {
+		http.Error(w, "Unauthorized: Player ID not found", http.StatusUnauthorized)
+		return
+	}
+
+	gameID := chi.URLParam(r, "gameID")
+	id, err := strconv.Atoi(gameID)
+	if err != nil {
+		http.Error(w, "Invalid game ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get the current game state with creator_id
+	var game models.Game
+	var creatorID int
+	err = h.db.QueryRow(
+		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
+		id,
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &creatorID, &game.CreatedAt, &game.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Validate game can be joined
+	if game.Status != "waiting" {
+		http.Error(w, "Game is not available to join", http.StatusBadRequest)
+		return
+	}
+
+	if creatorID == joinerID {
+		http.Error(w, "Cannot join your own game", http.StatusBadRequest)
+		return
+	}
+
+	if game.BlackPlayerID != nil || game.WhitePlayerID != nil {
+		http.Error(w, "Game already has two players", http.StatusBadRequest)
+		return
+	}
+
+	// Get ratings for both players to determine colors
+	var creatorRating, joinerRating int
+	err = h.db.QueryRow("SELECT rating FROM players WHERE id = $1", creatorID).Scan(&creatorRating)
+	if err != nil {
+		http.Error(w, "Failed to get creator rating", http.StatusInternalServerError)
+		return
+	}
+
+	err = h.db.QueryRow("SELECT rating FROM players WHERE id = $1", joinerID).Scan(&joinerRating)
+	if err != nil {
+		http.Error(w, "Failed to get joiner rating", http.StatusInternalServerError)
+		return
+	}
+
+	// If ratings are within 50 points, randomly assign
+	var blackPlayerID, whitePlayerID int
+	ratingDiff := creatorRating - joinerRating
+	
+	if ratingDiff < -50 {
+		// Creator is weaker, gets black
+		blackPlayerID = creatorID
+		whitePlayerID = joinerID
+	} else if ratingDiff > 50 {
+		// Joiner is weaker, gets black
+		blackPlayerID = joinerID
+		whitePlayerID = creatorID
+	} else {
+		// Ratings are close, randomly assign (based on game ID for determinism)
+		if id%2 == 0 {
+			blackPlayerID = creatorID
+			whitePlayerID = joinerID
+		} else {
+			blackPlayerID = joinerID
+			whitePlayerID = creatorID
+		}
+	}
+
+	// Update game with both players and set status to active
+	err = h.db.QueryRow(
+		"UPDATE games SET black_player_id = $1, white_player_id = $2, status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at",
+		blackPlayerID, whitePlayerID, id,
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(game)
 }
 
@@ -189,9 +312,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 
 	var game models.Game
 	err = h.db.QueryRow(
-		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, created_at, updated_at FROM games WHERE id = $1",
+		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
 		id,
-	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatedAt, &game.UpdatedAt)
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Game not found", http.StatusNotFound)

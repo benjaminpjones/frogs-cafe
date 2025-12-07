@@ -21,6 +21,7 @@ type Game struct {
 	BoardSize     int       `json:"board_size"`
 	Status        string    `json:"status"` // waiting, active, finished
 	WinnerID      *int      `json:"winner_id"`
+	CreatorID     *int      `json:"creator_id"` // Who created the game (for join validation)
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

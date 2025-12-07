@@ -47,6 +47,7 @@ func RunMigrations(db *DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_player_id ON sessions(player_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
+		`ALTER TABLE games ADD COLUMN IF NOT EXISTS creator_id INTEGER REFERENCES players(id)`,
 	}
 
 	for i, migration := range migrations {

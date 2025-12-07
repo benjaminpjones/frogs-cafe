@@ -12,7 +12,7 @@ function AppContent() {
   const [games, setGames] = useState<Game[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
-  const { player, logout, isLoading } = useAuth();
+  const { player, token, logout, isLoading } = useAuth();
 
   useEffect(() => {
     if (player) {
@@ -33,21 +33,60 @@ function AppContent() {
   };
 
   const createNewGame = async () => {
+    if (!token) return;
+
     try {
       const response = await fetch(`${API_URL}/api/v1/games`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           board_size: 19,
         }),
       });
+
+      if (!response.ok) {
+        throw new Error("Failed to create game");
+      }
+
       const newGame = await response.json();
       setGames([newGame, ...games]);
       setSelectedGame(newGame);
     } catch (error) {
       console.error("Error creating game:", error);
+      alert("Failed to create game");
+    }
+  };
+
+  const joinGame = async (gameId: number) => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/games/${gameId}/join`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+
+      const updatedGame = await response.json();
+
+      // Update the games list
+      setGames(games.map((g) => (g.id === updatedGame.id ? updatedGame : g)));
+      setSelectedGame(updatedGame);
+
+      alert("Successfully joined game!");
+    } catch (error) {
+      console.error("Error joining game:", error);
+      alert(`Failed to join game: ${error}`);
     }
   };
 
@@ -86,6 +125,8 @@ function AppContent() {
               games={games}
               selectedGame={selectedGame}
               onSelectGame={setSelectedGame}
+              onJoinGame={joinGame}
+              currentPlayerId={player?.id || 0}
             />
           )}
         </div>
