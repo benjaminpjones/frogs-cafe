@@ -10,13 +10,14 @@ COPY web_client/ ./
 RUN npm run build
 
 # Build backend
-FROM golang:1.21-alpine AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 
 WORKDIR /app
 
 RUN apk add --no-cache git
 
-COPY server/go.mod server/go.sum ./
+# Copy go mod files first for better caching
+COPY server/go.mod server/go.sum* ./
 RUN go mod download
 
 COPY server/ .

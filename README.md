@@ -26,10 +26,10 @@ frogs_cafe/
 
 ## Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 - PostgreSQL 15 or later (or use Docker)
 - Node.js 16 or later (for frontend)
-- Docker and Docker Compose (optional, for containerized development)
+- Docker (with Docker Compose V2 plugin) - optional, for containerized development
 
 ## Getting Started
 
@@ -56,7 +56,7 @@ frogs_cafe/
 **Single container with built React app:**
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 This builds the React app into static files and serves them from the Go server at `localhost:8080`
