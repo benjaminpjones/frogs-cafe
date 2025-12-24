@@ -33,6 +33,7 @@ services:
         condition: service_healthy
     volumes:
       - ./server:/app
+      - ./.env:/app/.env
       # Persist go modules to avoid re-downloading
       - go-modules:/go/pkg/mod
 

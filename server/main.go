@@ -20,11 +20,18 @@ import (
 
 func main() {
 	// Load environment variables
+	log.Println("\n=== Starting Frogs Café Server ===")
+	log.Printf("Current working directory: %s", os.Getenv("PWD"))
+	log.Println("Attempting to load .env file...")
+
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment variables")
+		log.Println("[INFO] No .env file found, using system environment variables")
+	} else {
+		log.Println("[OK] .env file loaded successfully")
 	}
 
 	// Load configuration
+	log.Println("\nLoading configuration...")
 	cfg := config.Load()
 
 	// Initialize database
