@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Player, AuthResponse } from '../types';
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
 interface AuthContextType {
   player: Player | null;
   token: string | null;
@@ -42,10 +44,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const login = async (username: string, password: string) => {
-    const response = await fetch('http://localhost:8080/api/v1/login', {
-      method: 'POST',
+    const response = await fetch(`${API_URL}/api/v1/login`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ username, password }),
     });
@@ -63,10 +65,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const register = async (username: string, email: string, password: string) => {
-    const response = await fetch('http://localhost:8080/api/v1/register', {
-      method: 'POST',
+    const response = await fetch(`${API_URL}/api/v1/register`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ username, email, password }),
     });
