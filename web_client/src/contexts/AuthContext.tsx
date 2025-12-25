@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Player, AuthResponse } from '../types';
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+import { API_URL } from '../config';
 
 interface AuthContextType {
   player: Player | null;

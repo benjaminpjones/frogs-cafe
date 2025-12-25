@@ -5,8 +5,7 @@ import GameBoard from './components/GameBoard';
 import { Auth } from "./components/Auth";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { Game } from './types';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+import { API_URL } from './config';
 
 function AppContent() {
   const [games, setGames] = useState<Game[]>([]);

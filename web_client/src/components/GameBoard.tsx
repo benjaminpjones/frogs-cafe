@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Game } from "../types";
 import { useAuth } from "../contexts/AuthContext";
+import { API_URL, WS_URL } from "../config";
 import "./GameBoard.css";
 
 interface GameBoardProps {
@@ -13,7 +14,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const [moveCount, setMoveCount] = useState(0);
   const { token, player } = useAuth();
 
-  const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080";
   const cellSize = 30;
   const padding = 20;
   const boardSize = game.board_size;
@@ -39,7 +39,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
       .map(() => Array(game.board_size).fill(null));
 
     // Load existing moves from the server
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
     fetch(`${API_URL}/api/v1/games/${game.id}/moves`)
       .then((res) => res.json())
       .then((moves) => {
