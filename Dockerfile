@@ -3,7 +3,7 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
 
-COPY web_client/package*.json ./
+COPY web_client/package.json web_client/package-lock.json ./
 RUN npm ci
 
 COPY web_client/ ./
