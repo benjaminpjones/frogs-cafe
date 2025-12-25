@@ -7,6 +7,9 @@ COPY web_client/package.json web_client/package-lock.json ./
 RUN npm ci
 
 COPY web_client/ ./
+# Set API_URL to empty string for same-origin requests in production
+ENV VITE_API_URL=""
+ENV VITE_WS_URL=""
 RUN npm run build
 
 # Build backend
