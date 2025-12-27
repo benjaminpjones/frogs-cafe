@@ -136,7 +136,9 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 func (c *Client) readPump() {
 	defer func() {
 		hub.unregister <- c
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("Failed to close connection: %v", err)
+		}
 	}()
 
 	for {
@@ -236,7 +238,9 @@ func (c *Client) readPump() {
 
 func (c *Client) writePump() {
 	defer func() {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("Failed to close connection: %v", err)
+		}
 	}()
 
 	for message := range c.send {
