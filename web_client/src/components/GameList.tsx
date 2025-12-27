@@ -7,7 +7,7 @@ interface GameListProps {
   selectedGame: Game | null;
   onSelectGame: (game: Game) => void;
   onJoinGame: (gameId: number) => void;
-  currentPlayerId: number;
+  currentPlayerId: number | null;
 }
 
 const GameList: React.FC<GameListProps> = ({
@@ -18,10 +18,13 @@ const GameList: React.FC<GameListProps> = ({
   currentPlayerId,
 }) => {
   const canJoinGame = (game: Game) => {
+    // Can't join if not logged in or if it's your own game
+    if (!currentPlayerId) return false;
     return game.status === "waiting" && game.creator_id !== currentPlayerId;
   };
 
   const isMyGame = (game: Game) => {
+    if (!currentPlayerId) return false;
     return (
       game.creator_id === currentPlayerId ||
       game.black_player_id === currentPlayerId ||

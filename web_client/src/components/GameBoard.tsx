@@ -57,10 +57,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         setBoard(newBoard);
       });
 
-    // Connect to WebSocket
-    const websocket = new WebSocket(
-      `${WS_URL}/ws?game_id=${game.id}&token=${token}`,
-    );
+    // Connect to WebSocket for all users (authenticated and guests)
+    // Token is optional - guests can watch games without authentication
+    const wsUrl = token
+      ? `${WS_URL}/ws?game_id=${game.id}&token=${token}`
+      : `${WS_URL}/ws?game_id=${game.id}`;
+
+    const websocket = new WebSocket(wsUrl);
 
     websocket.onopen = () => {
       console.log("WebSocket connected");
@@ -100,6 +103,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
       websocket.close();
     };
   }, [game.id, game.board_size, WS_URL]);
+
+  // Effect to upgrade WebSocket connection when user logs in
+  useEffect(() => {
+    if (ws && ws.readyState === WebSocket.OPEN && token) {
+      // Send authentication upgrade message
+      ws.send(
+        JSON.stringify({
+          type: "authenticate",
+          data: { token },
+        })
+      );
+    }
+  }, [token, ws]);
 
   const handleIntersectionClick = (x: number, y: number) => {
     // Check if board is initialized and position is empty
