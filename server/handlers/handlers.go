@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,7 +55,9 @@ func (h *Handler) SaveMove(gameIDStr string, playerID int, data map[string]inter
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+		log.Printf("Failed to encode health check response: %v", err)
+	}
 }
 
 // Player handlers
@@ -77,7 +80,9 @@ func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(players)
+	if err := json.NewEncoder(w).Encode(players); err != nil {
+		log.Printf("Failed to encode players response: %v", err)
+	}
 }
 
 func (h *Handler) CreatePlayer(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +105,9 @@ func (h *Handler) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(player)
+	if err := json.NewEncoder(w).Encode(player); err != nil {
+		log.Printf("Failed to encode player response: %v", err)
+	}
 }
 
 func (h *Handler) GetPlayer(w http.ResponseWriter, r *http.Request) {
