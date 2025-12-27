@@ -134,17 +134,17 @@ func (h *Handler) GetPlayer(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	// Support filtering by status query parameter
 	status := r.URL.Query().Get("status")
-	
+
 	var query string
 	var args []interface{}
-	
+
 	if status != "" {
 		query = "SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE status = $1 ORDER BY created_at DESC"
 		args = append(args, status)
 	} else {
 		query = "SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games ORDER BY created_at DESC"
 	}
-	
+
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -267,7 +267,7 @@ func (h *Handler) JoinGame(w http.ResponseWriter, r *http.Request) {
 	// If ratings are within 50 points, randomly assign
 	var blackPlayerID, whitePlayerID int
 	ratingDiff := creatorRating - joinerRating
-	
+
 	if ratingDiff < -50 {
 		// Creator is weaker, gets black
 		blackPlayerID = creatorID
@@ -467,7 +467,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	token := r.URL.Query().Get("token")
-	
+
 	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 		token = strings.TrimPrefix(authHeader, "Bearer ")
 	}

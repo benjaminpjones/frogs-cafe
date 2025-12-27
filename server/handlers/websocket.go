@@ -97,7 +97,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	var playerID int
 	var username string
 	var err error
-	
+
 	if token != "" {
 		// Validate session token
 		playerID, username, err = auth.ValidateSession(h.db.DB, token)
@@ -175,12 +175,12 @@ func (c *Client) readPump() {
 						}
 						continue
 					}
-					
+
 					// Upgrade the client's credentials
 					c.playerID = playerID
 					c.userID = username
 					log.Printf("Client upgraded to authenticated user: %s (ID: %d)", username, playerID)
-					
+
 					// Send success response
 					response := map[string]interface{}{
 						"type": "auth_success",
@@ -204,25 +204,25 @@ func (c *Client) readPump() {
 				log.Printf("Guest attempted to make a move - rejected")
 				continue
 			}
-			
+
 			if data, ok := msg["data"].(map[string]interface{}); ok {
 				// Use authenticated playerID from JWT, not from message
 				if err := hub.handler.SaveMove(c.gameID, c.playerID, data); err != nil {
 					log.Printf("Error saving move: %v", err)
 					continue
 				}
-				
+
 				// Add the authenticated player_id to the data before broadcasting
 				data["player_id"] = float64(c.playerID) // JSON numbers are float64
 				msg["data"] = data
-				
+
 				// Re-marshal the updated message
 				updatedMessage, err := json.Marshal(msg)
 				if err != nil {
 					log.Printf("Error marshaling updated message: %v", err)
 					continue
 				}
-				
+
 				// Broadcast the updated message to all clients in the same game
 				hub.broadcast <- updatedMessage
 				continue
