@@ -144,6 +144,34 @@ This builds the React app into static files and serves them from the Go server a
 
 ## Development
 
+### Development Tools
+
+**Go Linting (Optional for Local Development)**
+
+The CI pipeline uses `golangci-lint` to ensure code quality. While not required for local development, you can install it to catch issues before pushing:
+
+```bash
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+```
+
+**Run the linter:**
+```bash
+cd server
+golangci-lint run --timeout=5m
+```
+
+> **Note:** Do not use `go install` to install golangci-lint as it can cause dependency conflicts. See the [official installation guide](https://golangci-lint.run/welcome/install/) for more options.
+
+**Frontend Formatting**
+
+The project uses Prettier for code formatting:
+
+```bash
+cd web_client
+npm run format        # Format all files
+npm run format:check  # Check formatting without modifying
+```
+
 ### Running Tests
 ```bash
 go test ./...
