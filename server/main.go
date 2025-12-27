@@ -120,9 +120,16 @@ func main() {
 			// Check if file exists
 			filePath := staticDir + r.URL.Path
 			if _, err := os.Stat(filePath); os.IsNotExist(err) || r.URL.Path == "/" {
-				// Serve index.html for SPA routing
+				// Serve index.html for SPA routing - no cache for HTML
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				w.Header().Set("Pragma", "no-cache")
+				w.Header().Set("Expires", "0")
 				http.ServeFile(w, r, staticDir+"/index.html")
 				return
+			}
+			// Cache static assets (JS, CSS, images) for 1 year since they have hashed names
+			if strings.HasPrefix(r.URL.Path, "/assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			}
 			fileServer.ServeHTTP(w, r)
 		})
