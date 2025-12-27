@@ -112,7 +112,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         JSON.stringify({
           type: "authenticate",
           data: { token },
-        })
+        }),
       );
     }
   }, [token, ws]);

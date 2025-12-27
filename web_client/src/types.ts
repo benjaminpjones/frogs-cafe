@@ -30,7 +30,7 @@ export interface Move {
 }
 
 export interface WebSocketMessage {
-  type: 'move' | 'join' | 'leave' | 'chat';
+  type: "move" | "join" | "leave" | "chat";
   data: any;
 }
 

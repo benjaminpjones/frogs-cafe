@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import './App.css';
-import GameList from './components/GameList';
-import GameBoard from './components/GameBoard';
+import React, { useState, useEffect } from "react";
+import "./App.css";
+import GameList from "./components/GameList";
+import GameBoard from "./components/GameBoard";
 import { Auth } from "./components/Auth";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { Game } from './types';
-import { API_URL } from './config';
+import { Game } from "./types";
+import { API_URL } from "./config";
 
 function AppContent() {
   const [games, setGames] = useState<Game[]>([]);
