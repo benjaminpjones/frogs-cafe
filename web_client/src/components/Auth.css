@@ -2,30 +2,11 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-/* When used in a modal, remove the container styling */
-.auth-modal .auth-container {
-  min-height: auto;
-  background: none;
-  padding: 0;
 }
 
 .auth-card {
   background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 400px;
-}
-
-/* When in modal, adjust card styling */
-.auth-modal .auth-card {
-  box-shadow: none;
-  max-width: none;
   padding: 1rem 0 0 0;
 }
 
