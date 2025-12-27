@@ -1,6 +1,6 @@
-import React from 'react';
-import { Game } from '../types';
-import './GameList.css';
+import React from "react";
+import { Game } from "../types";
+import "./GameList.css";
 
 interface GameListProps {
   games: Game[];

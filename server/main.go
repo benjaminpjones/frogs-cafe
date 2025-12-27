@@ -40,7 +40,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Failed to close database: %v", err)
+		}
+	}()
 
 	// Run migrations
 	if err := database.RunMigrations(db); err != nil {
@@ -51,7 +55,7 @@ func main() {
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
-		
+
 		for range ticker.C {
 			if err := auth.CleanupExpiredSessions(db.DB); err != nil {
 				log.Printf("Failed to cleanup expired sessions: %v", err)
@@ -84,26 +88,26 @@ func main() {
 
 	// Routes
 	r.Get("/health", h.HealthCheck)
-	
+
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		// Auth routes
 		r.Post("/register", h.Register)
 		r.Post("/login", h.Login)
 		r.Post("/logout", h.Logout)
-		
+
 		// Public game routes (no auth required)
 		r.Get("/games", h.ListGames)
 		r.Get("/games/{gameID}", h.GetGame)
 		r.Get("/games/{gameID}/moves", h.GetGameMoves)
-		
+
 		// Protected game routes (require authentication)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAuth(db.DB))
 			r.Post("/games", h.CreateGame)
 			r.Post("/games/{gameID}/join", h.JoinGame)
 		})
-		
+
 		// Player routes
 		r.Get("/players", h.ListPlayers)
 		r.Post("/players", h.CreatePlayer)

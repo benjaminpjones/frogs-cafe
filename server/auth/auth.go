@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -81,7 +82,9 @@ func ValidateSession(db *sql.DB, token string) (int, string, error) {
 
 	// Check if session has expired
 	if time.Now().After(expiresAt) {
-		DeleteSession(db, token)
+		if err := DeleteSession(db, token); err != nil {
+			log.Printf("Failed to delete expired session: %v", err)
+		}
 		return 0, "", fmt.Errorf("session expired")
 	}
 

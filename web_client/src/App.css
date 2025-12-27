@@ -9,7 +9,7 @@
   color: white;
   padding: 2rem;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: relative;
 }
 
@@ -107,7 +107,7 @@
   background: white;
   border-radius: 8px;
   padding: 2rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -168,7 +168,7 @@
   .App-main {
     flex-direction: column;
   }
-  
+
   .sidebar {
     width: 100%;
   }

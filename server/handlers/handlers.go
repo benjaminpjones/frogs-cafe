@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,7 +55,9 @@ func (h *Handler) SaveMove(gameIDStr string, playerID int, data map[string]inter
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+		log.Printf("Failed to encode health check response: %v", err)
+	}
 }
 
 // Player handlers
@@ -64,7 +67,11 @@ func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Failed to close rows: %v", err)
+		}
+	}()
 
 	var players []models.Player
 	for rows.Next() {
@@ -77,7 +84,9 @@ func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(players)
+	if err := json.NewEncoder(w).Encode(players); err != nil {
+		log.Printf("Failed to encode players response: %v", err)
+	}
 }
 
 func (h *Handler) CreatePlayer(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +109,9 @@ func (h *Handler) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(player)
+	if err := json.NewEncoder(w).Encode(player); err != nil {
+		log.Printf("Failed to encode player response: %v", err)
+	}
 }
 
 func (h *Handler) GetPlayer(w http.ResponseWriter, r *http.Request) {
@@ -127,30 +138,36 @@ func (h *Handler) GetPlayer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(player)
+	if err := json.NewEncoder(w).Encode(player); err != nil {
+		log.Printf("Failed to encode player response: %v", err)
+	}
 }
 
 // Game handlers
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	// Support filtering by status query parameter
 	status := r.URL.Query().Get("status")
-	
+
 	var query string
 	var args []interface{}
-	
+
 	if status != "" {
 		query = "SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE status = $1 ORDER BY created_at DESC"
 		args = append(args, status)
 	} else {
 		query = "SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games ORDER BY created_at DESC"
 	}
-	
+
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Failed to close rows: %v", err)
+		}
+	}()
 
 	var games []models.Game
 	for rows.Next() {
@@ -163,7 +180,9 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(games)
+	if err := json.NewEncoder(w).Encode(games); err != nil {
+		log.Printf("Failed to encode games response: %v", err)
+	}
 }
 
 func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +218,9 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(game)
+	if err := json.NewEncoder(w).Encode(game); err != nil {
+		log.Printf("Failed to encode game response: %v", err)
+	}
 }
 
 func (h *Handler) JoinGame(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +288,7 @@ func (h *Handler) JoinGame(w http.ResponseWriter, r *http.Request) {
 	// If ratings are within 50 points, randomly assign
 	var blackPlayerID, whitePlayerID int
 	ratingDiff := creatorRating - joinerRating
-	
+
 	if ratingDiff < -50 {
 		// Creator is weaker, gets black
 		blackPlayerID = creatorID
@@ -299,7 +320,9 @@ func (h *Handler) JoinGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(game)
+	if err := json.NewEncoder(w).Encode(game); err != nil {
+		log.Printf("Failed to encode game response: %v", err)
+	}
 }
 
 func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
@@ -326,7 +349,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(game)
+	if err := json.NewEncoder(w).Encode(game); err != nil {
+		log.Printf("Failed to encode game response: %v", err)
+	}
 }
 
 func (h *Handler) GetGameMoves(w http.ResponseWriter, r *http.Request) {
@@ -345,7 +370,11 @@ func (h *Handler) GetGameMoves(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Failed to close rows: %v", err)
+		}
+	}()
 
 	var moves []models.Move
 	for rows.Next() {
@@ -358,7 +387,9 @@ func (h *Handler) GetGameMoves(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(moves)
+	if err := json.NewEncoder(w).Encode(moves); err != nil {
+		log.Printf("Failed to encode moves response: %v", err)
+	}
 }
 
 // Auth handlers
@@ -409,10 +440,12 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(models.AuthResponse{
+	if err := json.NewEncoder(w).Encode(models.AuthResponse{
 		Token:  token,
 		Player: player,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode auth response: %v", err)
+	}
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -458,16 +491,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(models.AuthResponse{
+	if err := json.NewEncoder(w).Encode(models.AuthResponse{
 		Token:  token,
 		Player: player,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode auth response: %v", err)
+	}
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	token := r.URL.Query().Get("token")
-	
+
 	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 		token = strings.TrimPrefix(authHeader, "Bearer ")
 	}

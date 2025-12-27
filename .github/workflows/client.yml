@@ -1,0 +1,57 @@
+name: Client CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'web_client/**'
+      - '.github/workflows/client.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'web_client/**'
+      - '.github/workflows/client.yml'
+
+jobs:
+  lint-and-build:
+    name: Lint and Build React Client
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./web_client
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web_client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 0
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+
+      - name: Check build output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Build failed - dist directory not created"
+            exit 1
+          fi
+          echo "Build successful - dist directory created"
