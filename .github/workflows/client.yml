@@ -2,7 +2,7 @@ name: Client CI
 
 on:
   push:
-    branches: [ main, ci ]
+    branches: [ main ]
     paths:
       - 'web_client/**'
       - '.github/workflows/client.yml'

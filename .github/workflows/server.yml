@@ -2,7 +2,7 @@ name: Server CI
 
 on:
   push:
-    branches: [ main, ci ]
+    branches: [ main ]
     paths:
       - 'server/**'
       - '.github/workflows/server.yml'
