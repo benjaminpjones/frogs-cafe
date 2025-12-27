@@ -93,16 +93,24 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if token == "" {
-		http.Error(w, "Unauthorized: no token provided", http.StatusUnauthorized)
-		return
-	}
-
-	// Validate session token
-	playerID, username, err := auth.ValidateSession(h.db.DB, token)
-	if err != nil {
-		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
-		return
+	// Token is now optional - guests can view without authentication
+	var playerID int
+	var username string
+	var err error
+	
+	if token != "" {
+		// Validate session token
+		playerID, username, err = auth.ValidateSession(h.db.DB, token)
+		if err != nil {
+			log.Printf("Token validation failed: %v", err)
+			// Continue as guest instead of returning error
+			playerID = 0
+			username = "guest"
+		}
+	} else {
+		// Guest viewer
+		playerID = 0
+		username = "guest"
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -149,8 +157,54 @@ func (c *Client) readPump() {
 
 		log.Printf("Received message: %+v", msg)
 
+		// Handle authentication upgrade
+		if msgType, ok := msg["type"].(string); ok && msgType == "authenticate" {
+			if data, ok := msg["data"].(map[string]interface{}); ok {
+				if tokenStr, ok := data["token"].(string); ok {
+					// Validate the token
+					playerID, username, err := auth.ValidateSession(hub.handler.db.DB, tokenStr)
+					if err != nil {
+						log.Printf("Authentication upgrade failed: %v", err)
+						// Send error response back to client
+						response := map[string]interface{}{
+							"type": "auth_error",
+							"data": map[string]string{"error": "Invalid token"},
+						}
+						if respBytes, err := json.Marshal(response); err == nil {
+							c.send <- respBytes
+						}
+						continue
+					}
+					
+					// Upgrade the client's credentials
+					c.playerID = playerID
+					c.userID = username
+					log.Printf("Client upgraded to authenticated user: %s (ID: %d)", username, playerID)
+					
+					// Send success response
+					response := map[string]interface{}{
+						"type": "auth_success",
+						"data": map[string]interface{}{
+							"player_id": playerID,
+							"username":  username,
+						},
+					}
+					if respBytes, err := json.Marshal(response); err == nil {
+						c.send <- respBytes
+					}
+					continue
+				}
+			}
+		}
+
 		// Handle move type messages
 		if msgType, ok := msg["type"].(string); ok && msgType == "move" {
+			// Only authenticated players can make moves
+			if c.playerID == 0 {
+				log.Printf("Guest attempted to make a move - rejected")
+				continue
+			}
+			
 			if data, ok := msg["data"].(map[string]interface{}); ok {
 				// Use authenticated playerID from JWT, not from message
 				if err := hub.handler.SaveMove(c.gameID, c.playerID, data); err != nil {

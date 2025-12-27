@@ -11,13 +11,13 @@ function AppContent() {
   const [games, setGames] = useState<Game[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
   const { player, token, logout, isLoading } = useAuth();
 
   useEffect(() => {
-    if (player) {
-      fetchGames();
-    }
-  }, [player]);
+    // Fetch games for everyone, not just logged in users
+    fetchGames();
+  }, []);
 
   const fetchGames = async () => {
     try {
@@ -32,7 +32,10 @@ function AppContent() {
   };
 
   const createNewGame = async () => {
-    if (!token) return;
+    if (!token) {
+      setShowAuth(true);
+      return;
+    }
 
     try {
       const response = await fetch(`${API_URL}/api/v1/games`, {
@@ -60,7 +63,10 @@ function AppContent() {
   };
 
   const joinGame = async (gameId: number) => {
-    if (!token) return;
+    if (!token) {
+      setShowAuth(true);
+      return;
+    }
 
     try {
       const response = await fetch(`${API_URL}/api/v1/games/${gameId}/join`, {
@@ -93,22 +99,26 @@ function AppContent() {
     return <div>Loading...</div>;
   }
 
-  if (!player) {
-    return <Auth />;
-  }
-
   return (
     <div className="App">
       <header className="App-header">
         <h1>🐸 Frogs Café - Go Server</h1>
         <p>Play the ancient game of Go (Baduk/Weiqi)</p>
         <div className="user-info">
-          <span>
-            Welcome, {player.username}! (Rating: {player.rating})
-          </span>
-          <button onClick={logout} className="logout-btn">
-            Logout
-          </button>
+          {player ? (
+            <>
+              <span>
+                Welcome, {player.username}! (Rating: {player.rating})
+              </span>
+              <button onClick={logout} className="logout-btn">
+                Logout
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setShowAuth(true)} className="login-btn">
+              Login
+            </button>
+          )}
         </div>
       </header>
 
@@ -125,7 +135,7 @@ function AppContent() {
               selectedGame={selectedGame}
               onSelectGame={setSelectedGame}
               onJoinGame={joinGame}
-              currentPlayerId={player?.id || 0}
+              currentPlayerId={player?.id || null}
             />
           )}
         </div>
@@ -140,6 +150,17 @@ function AppContent() {
           )}
         </div>
       </main>
+
+      {showAuth && (
+        <div className="auth-modal-overlay" onClick={() => setShowAuth(false)}>
+          <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="close-modal" onClick={() => setShowAuth(false)}>
+              ×
+            </button>
+            <Auth onSuccess={() => setShowAuth(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
