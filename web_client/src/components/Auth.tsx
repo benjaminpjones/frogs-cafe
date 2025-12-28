@@ -22,10 +22,6 @@ export const Auth = ({ onSuccess }: AuthProps) => {
       if (isLogin) {
         await login(username, password);
       } else {
-        if (!email) {
-          setError("Email is required");
-          return;
-        }
         await register(username, email, password);
       }
       // Call onSuccess callback if provided
@@ -56,13 +52,12 @@ export const Auth = ({ onSuccess }: AuthProps) => {
 
           {!isLogin && (
             <div className="form-group">
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">Email (optional)</label>
               <input
                 type="email"
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
               />
             </div>
           )}
@@ -75,7 +70,6 @@ export const Auth = ({ onSuccess }: AuthProps) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
             />
           </div>
 
