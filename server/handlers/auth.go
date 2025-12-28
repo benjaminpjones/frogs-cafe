@@ -18,25 +18,17 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate input
-	if req.Username == "" || req.Email == "" || req.Password == "" {
-		http.Error(w, "Username, email, and password are required", http.StatusBadRequest)
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, "Username and password are required", http.StatusBadRequest)
 		return
 	}
 
-	if len(req.Password) < 6 {
-		http.Error(w, "Password must be at least 6 characters", http.StatusBadRequest)
-		return
-	}
-
-	// Hash password
 	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
 		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
 		return
 	}
 
-	// Create player
 	var player models.Player
 	err = h.db.QueryRow(
 		"INSERT INTO players (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, rating, created_at, updated_at",
@@ -44,12 +36,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	).Scan(&player.ID, &player.Username, &player.Email, &player.Rating, &player.CreatedAt, &player.UpdatedAt)
 
 	if err != nil {
-		// Check for unique constraint violations
 		http.Error(w, "Username or email already exists", http.StatusConflict)
 		return
 	}
 
-	// Create session
 	token, err := auth.CreateSession(h.db.DB, player.ID)
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
@@ -73,13 +63,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate input
 	if req.Username == "" || req.Password == "" {
 		http.Error(w, "Username and password are required", http.StatusBadRequest)
 		return
 	}
 
-	// Get player from database
 	var player models.Player
 	err := h.db.QueryRow(
 		"SELECT id, username, email, password_hash, rating, created_at, updated_at FROM players WHERE username = $1",
@@ -95,13 +83,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check password
 	if !auth.CheckPasswordHash(req.Password, player.PasswordHash) {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
 
-	// Create session
 	token, err := auth.CreateSession(h.db.DB, player.ID)
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
