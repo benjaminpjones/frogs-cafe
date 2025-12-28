@@ -103,9 +103,9 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	// Store creator_id temporarily to track who created the game
 	var game models.Game
 	err := h.db.QueryRow(
-"INSERT INTO games (black_player_id, white_player_id, board_size, status, creator_id) VALUES (NULL, NULL, $1, 'waiting', $2) RETURNING id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at",
-req.BoardSize, playerID,
-).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
+		"INSERT INTO games (black_player_id, white_player_id, board_size, status, creator_id) VALUES (NULL, NULL, $1, 'waiting', $2) RETURNING id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at",
+		req.BoardSize, playerID,
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -138,9 +138,9 @@ func (h *Handler) JoinGame(w http.ResponseWriter, r *http.Request) {
 	var game models.Game
 	var creatorID int
 	err = h.db.QueryRow(
-"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
-id,
-).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &creatorID, &game.CreatedAt, &game.UpdatedAt)
+		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
+		id,
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &creatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Game not found", http.StatusNotFound)
@@ -206,9 +206,9 @@ id,
 
 	// Update game with both players and set status to active
 	err = h.db.QueryRow(
-"UPDATE games SET black_player_id = $1, white_player_id = $2, status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at",
-blackPlayerID, whitePlayerID, id,
-).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
+		"UPDATE games SET black_player_id = $1, white_player_id = $2, status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at",
+		blackPlayerID, whitePlayerID, id,
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -231,9 +231,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 
 	var game models.Game
 	err = h.db.QueryRow(
-"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
-id,
-).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
+		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
+		id,
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Game not found", http.StatusNotFound)
@@ -259,9 +259,9 @@ func (h *Handler) GetGameMoves(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Query(
-"SELECT id, game_id, player_id, move_number, x, y, created_at FROM moves WHERE game_id = $1 ORDER BY move_number ASC",
-id,
-)
+		"SELECT id, game_id, player_id, move_number, x, y, created_at FROM moves WHERE game_id = $1 ORDER BY move_number ASC",
+		id,
+	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

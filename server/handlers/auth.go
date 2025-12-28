@@ -39,9 +39,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// Create player
 	var player models.Player
 	err = h.db.QueryRow(
-"INSERT INTO players (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, rating, created_at, updated_at",
-req.Username, req.Email, hashedPassword,
-).Scan(&player.ID, &player.Username, &player.Email, &player.Rating, &player.CreatedAt, &player.UpdatedAt)
+		"INSERT INTO players (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, rating, created_at, updated_at",
+		req.Username, req.Email, hashedPassword,
+	).Scan(&player.ID, &player.Username, &player.Email, &player.Rating, &player.CreatedAt, &player.UpdatedAt)
 
 	if err != nil {
 		// Check for unique constraint violations
@@ -59,9 +59,9 @@ req.Username, req.Email, hashedPassword,
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(models.AuthResponse{
-Token:  token,
-Player: player,
-}); err != nil {
+		Token:  token,
+		Player: player,
+	}); err != nil {
 		log.Printf("Failed to encode auth response: %v", err)
 	}
 }
@@ -82,9 +82,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Get player from database
 	var player models.Player
 	err := h.db.QueryRow(
-"SELECT id, username, email, password_hash, rating, created_at, updated_at FROM players WHERE username = $1",
-req.Username,
-).Scan(&player.ID, &player.Username, &player.Email, &player.PasswordHash, &player.Rating, &player.CreatedAt, &player.UpdatedAt)
+		"SELECT id, username, email, password_hash, rating, created_at, updated_at FROM players WHERE username = $1",
+		req.Username,
+	).Scan(&player.ID, &player.Username, &player.Email, &player.PasswordHash, &player.Rating, &player.CreatedAt, &player.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
@@ -110,9 +110,9 @@ req.Username,
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(models.AuthResponse{
-Token:  token,
-Player: player,
-}); err != nil {
+		Token:  token,
+		Player: player,
+	}); err != nil {
 		log.Printf("Failed to encode auth response: %v", err)
 	}
 }
