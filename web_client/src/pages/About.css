@@ -1,0 +1,90 @@
+@import "../styles/common.css";
+
+.about-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.about-content {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.about-section {
+  margin-bottom: 2.5rem;
+}
+
+.about-section:last-child {
+  margin-bottom: 0;
+}
+
+.about-section h2 {
+  color: #2d5016;
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+}
+
+.about-section p {
+  color: #444;
+  line-height: 1.7;
+  margin: 0.75rem 0;
+  font-size: 1.05rem;
+}
+
+.about-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.about-section li {
+  padding: 0.5rem 0 0.5rem 1.5rem;
+  position: relative;
+  color: #444;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.about-section li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #4a7c2c;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.github-link {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: #2d5016;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.github-link:hover {
+  background: #1f3810;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(45, 80, 22, 0.3);
+}
+
+@media (max-width: 768px) {
+  .about-content {
+    padding: 1.5rem;
+  }
+
+  .about-section h2 {
+    font-size: 1.3rem;
+  }
+
+  .about-section p,
+  .about-section li {
+    font-size: 1rem;
+  }
+}

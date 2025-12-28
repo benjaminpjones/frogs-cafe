@@ -1,0 +1,26 @@
+@import "../styles/common.css";
+
+.player-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.viewing-player {
+  margin-top: 1.5rem !important;
+  padding: 1rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.viewing-player strong {
+  color: #2d5016;
+}
+
+.placeholder-note {
+  margin-top: 1.5rem !important;
+  font-style: italic;
+  color: #4a7c2c;
+}
+
+/* Mobile styles inherited from common.css */

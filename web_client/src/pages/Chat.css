@@ -1,0 +1,10 @@
+@import "../styles/common.css";
+
+.chat-page,
+.about-page,
+.player-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* All other styles inherited from common.css */

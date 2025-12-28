@@ -19,6 +19,8 @@ interface AuthContextType {
   ) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+  showAuthModal: boolean;
+  setShowAuthModal: (show: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,6 +41,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [player, setPlayer] = useState<Player | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     // Check for stored token on mount
@@ -107,7 +110,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   return (
     <AuthContext.Provider
-      value={{ player, token, login, register, logout, isLoading }}
+      value={{
+        player,
+        token,
+        login,
+        register,
+        logout,
+        isLoading,
+        showAuthModal,
+        setShowAuthModal,
+      }}
     >
       {children}
     </AuthContext.Provider>

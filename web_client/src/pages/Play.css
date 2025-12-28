@@ -1,0 +1,48 @@
+@import "../styles/common.css";
+
+.play-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.play-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.create-game-btn {
+  /* Uses .primary-btn from common.css but with custom styling */
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #4a7c2c 0%, #2d5016 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(45, 80, 22, 0.3);
+}
+
+.create-game-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(45, 80, 22, 0.4);
+}
+
+.play-page h2 {
+  color: #2d5016;
+  margin: 2rem 0 1rem 0;
+  font-size: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .play-actions {
+    flex-direction: column;
+  }
+
+  .create-game-btn,
+  .refresh-btn {
+    width: 100%;
+  }
+}

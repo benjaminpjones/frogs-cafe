@@ -1,0 +1,28 @@
+@import "../styles/common.css";
+
+.watch-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.watch-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+/* refresh-btn, loading, error-message inherited from common.css */
+
+.watch-page h2 {
+  color: #2d5016;
+  margin: 2rem 0 1rem 0;
+  font-size: 1.5rem;
+}
+
+/* no-games inherited from common.css */
+
+@media (max-width: 768px) {
+  .refresh-btn {
+    width: 100%;
+  }
+}
