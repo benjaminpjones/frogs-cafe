@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"strconv"
-
 	"frogs_cafe/database"
 )
 
