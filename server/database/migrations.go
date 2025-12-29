@@ -23,7 +23,6 @@ func RunMigrations(db *DB) error {
 	if err != nil {
 		return fmt.Errorf("could not create migrate instance: %w", err)
 	}
-	defer m.Close()
 
 	err = m.Up()
 	if err != nil && err != migrate.ErrNoChange {
