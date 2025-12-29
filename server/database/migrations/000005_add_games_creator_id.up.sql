@@ -1,0 +1,1 @@
+ALTER TABLE games ADD COLUMN IF NOT EXISTS creator_id INTEGER REFERENCES players(id);

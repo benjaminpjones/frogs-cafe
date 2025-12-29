@@ -13,4 +13,7 @@ require (
 	golang.org/x/crypto v0.45.0
 )
 
-require golang.org/x/net v0.47.0 // indirect
+require (
+	github.com/golang-migrate/migrate/v4 v4.19.1 // indirect
+	golang.org/x/net v0.47.0 // indirect
+)

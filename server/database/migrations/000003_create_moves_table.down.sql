@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_moves_game_id;
+DROP TABLE IF EXISTS moves CASCADE;

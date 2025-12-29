@@ -34,6 +34,7 @@ WORKDIR /app
 RUN apk --no-cache add ca-certificates
 
 COPY --from=backend-builder /server /app/server
+COPY --from=backend-builder /app/database/migrations /app/database/migrations
 COPY --from=frontend-builder /frontend/dist /app/static
 
 EXPOSE 8080

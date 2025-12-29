@@ -18,3 +18,7 @@ postgres_data/
 
 # Go build artifacts (Air live reload)
 server/tmp/
+
+# Go binaries
+server/frogs_cafe
+server/main
