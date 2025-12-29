@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -22,6 +23,7 @@ func RunMigrations(db *DB) error {
 	if err != nil {
 		return fmt.Errorf("could not create migrate instance: %w", err)
 	}
+	defer m.Close()
 
 	err = m.Up()
 	if err != nil && err != migrate.ErrNoChange {
@@ -34,9 +36,9 @@ func RunMigrations(db *DB) error {
 	}
 
 	if err == migrate.ErrNilVersion {
-		fmt.Println("No migrations have been applied yet")
+		log.Println("No migrations have been applied yet")
 	} else {
-		fmt.Printf("Current migration version: %d (dirty: %t)\n", version, dirty)
+		log.Printf("Current migration version: %d (dirty: %t)\n", version, dirty)
 	}
 
 	return nil
