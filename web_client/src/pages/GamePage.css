@@ -1,0 +1,92 @@
+@import "../styles/common.css";
+
+.game-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.game-page-header {
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.game-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.game-meta h2 {
+  margin: 0;
+  color: #2d5016;
+  font-size: 1.5rem;
+}
+
+/* game-status inherited from common.css */
+
+.game-board-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 500px;
+}
+
+.error-container {
+  padding: 3rem;
+  text-align: center;
+  max-width: 600px;
+  margin: 2rem auto;
+  background: #ffebee;
+  border-radius: 8px;
+  border: 1px solid #ef5350;
+}
+
+.error-container h2 {
+  color: #d32f2f;
+  margin: 0 0 1rem 0;
+}
+
+.error-container p {
+  color: #666;
+  margin: 0 0 1.5rem 0;
+  font-size: 1.1rem;
+}
+
+.error-container .back-link {
+  display: inline-block;
+  background: #4a7c2c;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.error-container .back-link:hover {
+  background: #2d5016;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .game-page {
+    padding: 0.5rem;
+  }
+
+  .game-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .game-meta h2 {
+    font-size: 1.25rem;
+  }
+
+  .game-board-container {
+    min-height: 400px;
+  }
+}

@@ -4,22 +4,22 @@ import "./GameList.css";
 
 interface GameListProps {
   games: Game[];
-  selectedGame: Game | null;
-  onSelectGame: (game: Game) => void;
-  onJoinGame: (gameId: number) => void;
+  onGameClick: (gameId: number) => void;
   currentPlayerId: number | null;
+  showJoinButton?: boolean;
+  onJoinGame?: (gameId: number) => void;
 }
 
 const GameList: React.FC<GameListProps> = ({
   games,
-  selectedGame,
-  onSelectGame,
-  onJoinGame,
+  onGameClick,
   currentPlayerId,
+  showJoinButton = false,
+  onJoinGame,
 }) => {
   const canJoinGame = (game: Game) => {
     // Can't join if not logged in or if it's your own game
-    if (!currentPlayerId) return false;
+    if (!currentPlayerId || !showJoinButton) return false;
     return game.status === "waiting" && game.creator_id !== currentPlayerId;
   };
 
@@ -34,7 +34,6 @@ const GameList: React.FC<GameListProps> = ({
 
   return (
     <div className="game-list">
-      <h2>Games</h2>
       {games.length === 0 ? (
         <p className="no-games">No games available</p>
       ) : (
@@ -42,10 +41,8 @@ const GameList: React.FC<GameListProps> = ({
           {games.map((game) => (
             <li
               key={game.id}
-              className={`game-item ${
-                selectedGame?.id === game.id ? "selected" : ""
-              } ${isMyGame(game) ? "my-game" : ""}`}
-              onClick={() => onSelectGame(game)}
+              className={`game-item ${isMyGame(game) ? "my-game" : ""}`}
+              onClick={() => onGameClick(game.id)}
             >
               <div className="game-info">
                 <span className="game-id">Game #{game.id}</span>
@@ -61,7 +58,7 @@ const GameList: React.FC<GameListProps> = ({
                   <span className="my-game-badge">Your Game</span>
                 )}
               </div>
-              {canJoinGame(game) && (
+              {canJoinGame(game) && onJoinGame && (
                 <button
                   className="join-btn"
                   onClick={(e) => {

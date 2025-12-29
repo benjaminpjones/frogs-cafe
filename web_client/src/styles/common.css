@@ -1,0 +1,186 @@
+/* Common styles shared across pages */
+
+/* Page Headers */
+.page-header {
+  margin-bottom: 2rem;
+}
+
+.page-header h1 {
+  margin: 0 0 0.5rem 0;
+  color: #2d5016;
+  font-size: 2rem;
+}
+
+.page-header p {
+  margin: 0;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+/* Loading and Error States */
+.loading,
+.error-message {
+  padding: 2rem;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.loading {
+  color: #666;
+}
+
+.error-message {
+  color: #d32f2f;
+  background: #ffebee;
+  border-radius: 6px;
+  border: 1px solid #ef5350;
+}
+
+/* Buttons */
+.refresh-btn {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #4a7c2c;
+  border-radius: 6px;
+  background: white;
+  color: #4a7c2c;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: #f5f5f5;
+}
+
+.primary-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #4a7c2c 0%, #2d5016 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(45, 80, 22, 0.3);
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(45, 80, 22, 0.4);
+}
+
+/* Game Status Badges */
+.game-status {
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.game-status.status-waiting {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.game-status.status-active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.game-status.status-finished {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+/* Placeholder Content (for Coming Soon pages) */
+.placeholder-content {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #f5f5f5;
+  border-radius: 12px;
+}
+
+.placeholder-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.placeholder-content h2 {
+  color: #2d5016;
+  margin: 0 0 1rem 0;
+  font-size: 1.8rem;
+}
+
+.placeholder-content p {
+  color: #666;
+  font-size: 1.1rem;
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+.placeholder-note {
+  margin-top: 1.5rem !important;
+  font-style: italic;
+  color: #4a7c2c;
+}
+
+/* No Content State */
+.no-games {
+  padding: 3rem 2rem;
+  text-align: center;
+  background: #f5f5f5;
+  border-radius: 8px;
+  color: #666;
+}
+
+.no-games p {
+  margin: 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+/* Links */
+.back-link {
+  color: #4a7c2c;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.back-link:hover {
+  background: #f0f5ed;
+  color: #2d5016;
+}
+
+/* Mobile Responsive Helpers */
+@media (max-width: 768px) {
+  .page-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .page-header p {
+    font-size: 1rem;
+  }
+
+  .placeholder-content {
+    padding: 3rem 1.5rem;
+  }
+
+  .placeholder-icon {
+    font-size: 3rem;
+  }
+
+  .placeholder-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .placeholder-content p {
+    font-size: 1rem;
+  }
+}
