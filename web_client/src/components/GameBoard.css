@@ -45,14 +45,32 @@
   justify-content: center;
   align-items: center;
   padding: 2rem 0;
+  width: 100%;
 }
 
-.board-canvas {
+.board-svg {
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 4px;
+  width: 100%;
+  max-width: 600px;
+  height: auto;
 }
 
-.board-canvas:hover {
+.board-svg:hover {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 768px) {
+  .game-header {
+    padding: 0 0.5rem;
+  }
+
+  .board-container {
+    padding: 0.5rem 0.25rem;
+  }
+
+  .board-svg {
+    max-width: 100%;
+  }
 }

@@ -269,7 +269,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         </div>
       </div>
       <div className="board-container">
-        <svg width={svgSize} height={svgSize} className="board-svg">
+        <svg viewBox={`0 0 ${svgSize} ${svgSize}`} className="board-svg">
           <rect width={svgSize} height={svgSize} fill="#DEB887" />
           {renderGridLines()}
           {renderStarPoints()}
