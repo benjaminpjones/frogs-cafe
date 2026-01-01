@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Game } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { API_URL, WS_URL } from "../config";
@@ -12,11 +12,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const [board, setBoard] = useState<(string | null)[][]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [moveCount, setMoveCount] = useState(0);
+  const [currentGame, setCurrentGame] = useState<Game>(game);
+  const currentGameRef = useRef<Game>(game);
   const { token, player } = useAuth();
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    currentGameRef.current = currentGame;
+  }, [currentGame]);
 
   const cellSize = 30;
   const padding = 20;
-  const boardSize = game.board_size;
+  const boardSize = currentGame.board_size;
   const svgSize = (boardSize - 1) * cellSize + padding * 2;
 
   // Determine which color the current player is
@@ -27,8 +34,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
 
   // Determine color based on player ID
   const getColorForPlayer = (playerId: number): "black" | "white" | null => {
-    if (playerId === game.black_player_id) return "black";
-    if (playerId === game.white_player_id) return "white";
+    // Use ref to get the latest game state
+    const latestGame = currentGameRef.current;
+    if (playerId === latestGame.black_player_id) return "black";
+    if (playerId === latestGame.white_player_id) return "white";
     return null;
   };
 
@@ -42,14 +51,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     fetch(`${API_URL}/api/v1/games/${game.id}/moves`)
       .then((res) => res.json())
       .then((moves) => {
-        moves.forEach((move: any) => {
-          // Determine color based on which player made the move
-          const color = getColorForPlayer(move.player_id);
-          if (color) {
-            newBoard[move.y][move.x] = color;
-          }
-        });
-        setMoveCount(moves.length);
+        if (moves && Array.isArray(moves)) {
+          moves.forEach((move: any) => {
+            // Determine color based on which player made the move
+            const color = getColorForPlayer(move.player_id);
+            if (color) {
+              newBoard[move.y][move.x] = color;
+            }
+          });
+          setMoveCount(moves.length);
+        } else {
+          console.warn("Moves data is not an array:", moves);
+          setMoveCount(0);
+        }
       })
       .catch((err) => console.error("Error loading moves:", err))
       .finally(() => {
@@ -71,7 +85,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
 
     websocket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      console.log("Received:", message);
 
       // Handle incoming moves from other players
       if (message.type === "move" && message.data) {
@@ -85,6 +98,25 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
             return newBoard;
           });
           setMoveCount((prevCount) => prevCount + 1);
+        } else {
+          console.warn(
+            `Unable to place stone: player ${player_id} not in this game`,
+          );
+        }
+      }
+
+      // Handle game status updates
+      if (message.type === "game_update" && message.data) {
+        if (message.data.game) {
+          // Update the game object with the correct player IDs from the message
+          const updatedGame = {
+            ...message.data.game,
+            black_player_id: message.data.black_player_id,
+            white_player_id: message.data.white_player_id,
+            status: message.data.status,
+          };
+          setCurrentGame(updatedGame);
+          console.log(`Game #${updatedGame.id} started: ${updatedGame.status}`);
         }
       }
     };
@@ -102,18 +134,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     return () => {
       websocket.close();
     };
-  }, [game.id, game.board_size, WS_URL]);
+  }, [game.id, currentGame.board_size, WS_URL]);
 
   // Effect to upgrade WebSocket connection when user logs in
   useEffect(() => {
     if (ws && ws.readyState === WebSocket.OPEN && token) {
-      // Send authentication upgrade message
-      ws.send(
-        JSON.stringify({
-          type: "authenticate",
-          data: { token },
-        }),
-      );
+      const authMessage = {
+        type: "authenticate",
+        data: { token },
+      };
+      ws.send(JSON.stringify(authMessage));
     }
   }, [token, ws]);
 
@@ -134,12 +164,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
 
     // Send move via WebSocket with player_id
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "move",
-          data: { x, y, game_id: game.id, player_id: player?.id },
-        }),
-      );
+      const moveMessage = {
+        type: "move",
+        data: { x, y, game_id: currentGame.id, player_id: player?.id },
+      };
+      ws.send(JSON.stringify(moveMessage));
     }
 
     // Update local board optimistically
@@ -260,11 +289,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   return (
     <div className="game-board">
       <div className="game-header">
-        <h2>Game #{game.id}</h2>
+        <h2>Game #{currentGame.id}</h2>
         <div className="game-meta">
-          <span className={`status status-${game.status}`}>{game.status}</span>
+          <span className={`status status-${currentGame.status}`}>
+            {currentGame.status}
+          </span>
           <span>
-            Board Size: {game.board_size}×{game.board_size}
+            Board Size: {currentGame.board_size}×{currentGame.board_size}
           </span>
         </div>
       </div>

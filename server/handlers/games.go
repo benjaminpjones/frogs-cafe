@@ -211,8 +211,32 @@ func (h *Handler) JoinGame(w http.ResponseWriter, r *http.Request) {
 	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Failed to update game status: %v", err)
+		http.Error(w, "Failed to join game", http.StatusInternalServerError)
 		return
+	}
+
+	log.Printf("Game #%d status changed to 'active' - Black: Player #%d, White: Player #%d", game.ID, blackPlayerID, whitePlayerID)
+
+	// Broadcast game status update via WebSocket
+	if hub := GetHub(); hub != nil {
+		gameUpdate := map[string]interface{}{
+			"type": "game_update",
+			"data": map[string]interface{}{
+				"game_id":         game.ID,
+				"status":          game.Status,
+				"black_player_id": game.BlackPlayerID,
+				"white_player_id": game.WhitePlayerID,
+				"game":            game,
+			},
+		}
+		if updateBytes, err := json.Marshal(gameUpdate); err == nil {
+			hub.broadcast <- updateBytes
+		} else {
+			log.Printf("Failed to marshal game_update message: %v", err)
+		}
+	} else {
+		log.Printf("Warning: WebSocket hub not initialized, skipping broadcast")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -272,7 +296,8 @@ func (h *Handler) GetGameMoves(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	var moves []models.Move
+	// Initialize as empty slice to ensure JSON encoding returns [] instead of null
+	moves := []models.Move{}
 	for rows.Next() {
 		var m models.Move
 		if err := rows.Scan(&m.ID, &m.GameID, &m.PlayerID, &m.MoveNumber, &m.X, &m.Y, &m.CreatedAt); err != nil {
