@@ -89,7 +89,7 @@ func (h *Hub) run() {
 					}
 				}
 			}
-			
+
 			recipientCount := 0
 			for client := range h.clients {
 				// Only send to clients watching the target game (or broadcast if no game_id)
