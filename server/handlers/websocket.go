@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -50,6 +51,10 @@ func InitHub(h *Handler) {
 	go hub.run()
 }
 
+func GetHub() *Hub {
+	return hub
+}
+
 func (h *Hub) run() {
 	for {
 		select {
@@ -70,14 +75,35 @@ func (h *Hub) run() {
 
 		case message := <-h.broadcast:
 			h.mutex.RLock()
-			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(h.clients, client)
+			// Parse message to log type and determine target game
+			var msgData map[string]interface{}
+			targetGameID := ""
+			msgType := "unknown"
+			if err := json.Unmarshal(message, &msgData); err == nil {
+				if t, ok := msgData["type"].(string); ok {
+					msgType = t
+				}
+				if data, ok := msgData["data"].(map[string]interface{}); ok {
+					if gid, ok := data["game_id"].(float64); ok {
+						targetGameID = fmt.Sprintf("%.0f", gid)
+					}
 				}
 			}
+			
+			recipientCount := 0
+			for client := range h.clients {
+				// Only send to clients watching the target game (or broadcast if no game_id)
+				if targetGameID == "" || client.gameID == targetGameID {
+					select {
+					case client.send <- message:
+						recipientCount++
+					default:
+						close(client.send)
+						delete(h.clients, client)
+					}
+				}
+			}
+			log.Printf("Broadcast [%s] to %d clients (game=%s)", msgType, recipientCount, targetGameID)
 			h.mutex.RUnlock()
 		}
 	}
