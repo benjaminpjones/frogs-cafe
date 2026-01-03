@@ -30,26 +30,22 @@ frogs_cafe/
 - PostgreSQL 15 or later (or use Docker)
 - Node.js 16 or later (for frontend)
 - Docker (with Docker Compose V2 plugin) - optional, for containerized development
+- [just](https://github.com/casey/just) - optional, command runner for easier workflows
+- [tmux](https://github.com/tmux/tmux/wiki/Installing) - optional, for split-screen development with `just run`
 
 ## Getting Started
 
 ### Development Mode (Recommended)
 
-**Best for active development with hot-reload:**
+Installing dependencies and running the frontend and backend servers with hot reload is easy, using [just](https://github.com/casey/just).
 
-1. **Start backend services with Docker:**
-   ```bash
-   docker compose -f docker-compose.dev.yml up
-   ```
-   This starts PostgreSQL and the Go server on `localhost:8080`
+```bash
+# First time setup - install dependencies
+just install
 
-2. **Run React dev server locally:**
-   ```bash
-   cd web_client
-   npm install
-   npm run dev
-   ```
-   Frontend runs on `localhost:3000` with hot-reload. API calls are automatically proxied to the backend.
+# Run both server and client
+just run
+```
 
 ### Production Mode
 
@@ -62,6 +58,9 @@ docker compose up --build
 This builds the React app into static files and serves them from the Go server at `localhost:8080`
 
 ### Manual Setup (No Docker)
+
+If you don't want to install tools like just, Docker or tmux, the bare minimum dependencies are
+the Go and Node toolchains and Postgres.  You can run them directly, like so.
 
 1. **Set up PostgreSQL**:
    ```bash
