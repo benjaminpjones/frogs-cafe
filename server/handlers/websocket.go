@@ -27,12 +27,12 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	conn      *websocket.Conn
-	send      chan []byte
-	gameID    string
-	userID    string
-	playerID  int    // local player ID; -1 for remote (BIK) players
-	actorURI  string // set for remote players authenticated via BIK token
+	conn     *websocket.Conn
+	send     chan []byte
+	gameID   string
+	userID   string
+	playerID int    // local player ID; -1 for remote (BIK) players
+	actorURI string // set for remote players authenticated via BIK token
 }
 
 type Hub struct {

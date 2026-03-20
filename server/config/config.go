@@ -6,12 +6,12 @@ import (
 )
 
 type Config struct {
-	DatabaseURL    string
-	Port           string
-	JWTSecret      string
-	Environment    string
-	BaseURL        string // e.g. https://frogs.cafe — used for actor URIs and AP activities
-	BIKPrivateKey  string // PEM-encoded Ed25519 private key for signing BIK tokens
+	DatabaseURL   string
+	Port          string
+	JWTSecret     string
+	Environment   string
+	BaseURL       string // e.g. https://frogs.cafe — used for actor URIs and AP activities
+	BIKPrivateKey string // PEM-encoded Ed25519 private key for signing BIK tokens
 }
 
 func Load() *Config {

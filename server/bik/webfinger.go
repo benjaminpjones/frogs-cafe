@@ -19,7 +19,7 @@ type KeyCache struct {
 }
 
 type keyCacheEntry struct {
-	key     ed25519.PublicKey
+	key       ed25519.PublicKey
 	fetchedAt time.Time
 }
 

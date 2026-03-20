@@ -67,8 +67,8 @@ type BikToken struct {
 // WebFinger response
 
 type WebFingerResponse struct {
-	Subject string             `json:"subject"`
-	Links   []WebFingerLink    `json:"links"`
+	Subject string          `json:"subject"`
+	Links   []WebFingerLink `json:"links"`
 }
 
 type WebFingerLink struct {
