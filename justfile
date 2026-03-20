@@ -11,6 +11,11 @@ install:
 	cd server && go mod download
 	cd web_client && npm install
 
+# Run BIK E2E test (two servers, two databases, full federation flow)
+e2e:
+	docker compose -f bik/e2e/docker-compose.yml run --rm test; \
+	docker compose -f bik/e2e/docker-compose.yml down -v
+
 # Run server and client in split tmux session with hot reload
 run:
 	#!/usr/bin/env bash

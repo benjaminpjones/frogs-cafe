@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+
+  server-a:
+    build:
+      context: ../..
+      dockerfile: bik/e2e/Dockerfile.server
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/frogs_cafe_a?sslmode=disable
+      PORT: 8080
+      BASE_URL: http://server-a:8080
+      ENVIRONMENT: e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  server-b:
+    build:
+      context: ../..
+      dockerfile: bik/e2e/Dockerfile.server
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/frogs_cafe_b?sslmode=disable
+      PORT: 8080
+      BASE_URL: http://server-b:8080
+      ENVIRONMENT: e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+
+  test:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ../../bik:/app
+    command: sh -c "cd /app/bik-js && npm install --silent && npx tsx /app/e2e/test.ts"
+    depends_on:
+      - server-a
+      - server-b
+    environment:
+      SERVER_A: http://server-a:8080
+      SERVER_B: http://server-b:8080
