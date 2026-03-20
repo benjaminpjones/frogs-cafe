@@ -199,7 +199,10 @@ func (h *Handler) sendGameState(client *Client, gameIDStr string) {
 	moves := []interface{}{}
 	for rows.Next() {
 		var x, y int
-		rows.Scan(&x, &y)
+		if err := rows.Scan(&x, &y); err != nil {
+			log.Printf("sendGameState: scan move: %v", err)
+			continue
+		}
 		moves = append(moves, pos{x, y})
 	}
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -45,13 +46,17 @@ func (h *Handler) WellKnownWebFinger(w http.ResponseWriter, r *http.Request) {
 		}},
 	}
 	w.Header().Set("Content-Type", "application/jrd+json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("WellKnownWebFinger: encode: %v", err)
+	}
 }
 
 // WellKnownBIKKeys handles GET /.well-known/bik/keys
 func (h *Handler) WellKnownBIKKeys(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(h.bikKeys.JWKSet())
+	if err := json.NewEncoder(w).Encode(h.bikKeys.JWKSet()); err != nil {
+		log.Printf("WellKnownBIKKeys: encode: %v", err)
+	}
 }
 
 // BIKInbox handles POST /bik/inbox — receives AP activities from remote servers
@@ -105,14 +110,16 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 
 	// Look up the host player's username
 	var creatorUsername string
-	h.db.QueryRow("SELECT username FROM players WHERE id = $1", creatorID).Scan(&creatorUsername)
+	if err := h.db.QueryRow("SELECT username FROM players WHERE id = $1", creatorID).Scan(&creatorUsername); err != nil {
+		http.Error(w, "failed to look up creator", http.StatusInternalServerError)
+		return
+	}
 
 	// Assign colors: creator gets black for now (TODO: respect colorPref)
 	blackActor := fmt.Sprintf("%s/users/%s", h.cfg.BaseURL, creatorUsername)
 	whiteActor := activity.Actor
 
 	// Create the game
-	gameID := fmt.Sprintf("%d", time.Now().UnixNano()) // simple unique ID
 	var dbGameID int
 	err = h.db.QueryRow(`
 		INSERT INTO games (black_player_id, board_size, status, creator_id, black_actor_uri, white_actor_uri, bik_challenge_uri)
@@ -123,10 +130,12 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "failed to create game", http.StatusInternalServerError)
 		return
 	}
-	gameID = fmt.Sprintf("%d", dbGameID)
+	gameID := fmt.Sprintf("%d", dbGameID)
 
 	// Mark challenge as accepted
-	h.db.Exec("UPDATE bik_challenges SET status = 'accepted' WHERE id = $1", challengeID)
+	if _, err := h.db.Exec("UPDATE bik_challenges SET status = 'accepted' WHERE id = $1", challengeID); err != nil {
+		log.Printf("handleChallengeAccept: mark accepted: %v", err)
+	}
 
 	// Build response: CreateGame activity
 	gameURI := fmt.Sprintf("%s/games/%s", h.cfg.BaseURL, gameID)
@@ -156,7 +165,9 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 
 	w.Header().Set("Content-Type", "application/activity+json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(gameActivity)
+	if err := json.NewEncoder(w).Encode(gameActivity); err != nil {
+		log.Printf("handleChallengeAccept: encode: %v", err)
+	}
 }
 
 func (h *Handler) broadcastUndoChallenge(challengeURI, actor string) {
@@ -191,7 +202,10 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var username string
-	h.db.QueryRow("SELECT username FROM players WHERE id = $1", playerID).Scan(&username)
+	if err := h.db.QueryRow("SELECT username FROM players WHERE id = $1", playerID).Scan(&username); err != nil {
+		http.Error(w, "failed to look up player", http.StatusInternalServerError)
+		return
+	}
 
 	challengeID := fmt.Sprintf("%d", time.Now().UnixNano())
 	challengeURI := fmt.Sprintf("%s/challenges/%s", h.cfg.BaseURL, challengeID)
@@ -231,7 +245,9 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/activity+json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(activity)
+	if err := json.NewEncoder(w).Encode(activity); err != nil {
+		log.Printf("CreateBIKChallenge: encode: %v", err)
+	}
 }
 
 // ListBIKChallenges handles GET /api/v1/bik/challenges
@@ -262,13 +278,18 @@ func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item challengeItem
 		var timeCtrlRaw []byte
-		rows.Scan(&item.URI, &item.Creator, &item.BoardSize, &timeCtrlRaw, &item.ColorPref, &item.ExpiresAt)
+		if err := rows.Scan(&item.URI, &item.Creator, &item.BoardSize, &timeCtrlRaw, &item.ColorPref, &item.ExpiresAt); err != nil {
+			http.Error(w, "db error", http.StatusInternalServerError)
+			return
+		}
 		item.TimeCtrl = json.RawMessage(timeCtrlRaw)
 		items = append(items, item)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	if err := json.NewEncoder(w).Encode(items); err != nil {
+		log.Printf("ListBIKChallenges: encode: %v", err)
+	}
 }
 
 // GetBIKToken handles POST /api/v1/bik/token — issues a signed token for a remote game
@@ -277,7 +298,10 @@ func (h *Handler) GetBIKToken(w http.ResponseWriter, r *http.Request) {
 	gameID := chi.URLParam(r, "gameID")
 
 	var username string
-	h.db.QueryRow("SELECT username FROM players WHERE id = $1", playerID).Scan(&username)
+	if err := h.db.QueryRow("SELECT username FROM players WHERE id = $1", playerID).Scan(&username); err != nil {
+		http.Error(w, "failed to look up player", http.StatusInternalServerError)
+		return
+	}
 
 	// Allow caller to provide the full game URI for cross-server games.
 	// Falls back to this server's own game URI if not specified.
@@ -294,5 +318,7 @@ func (h *Handler) GetBIKToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+	if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+		log.Printf("GetBIKToken: encode: %v", err)
+	}
 }

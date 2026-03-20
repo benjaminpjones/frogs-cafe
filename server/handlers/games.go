@@ -111,7 +111,9 @@ func (h *Handler) handleResign(c *Client) {
 	result := string(winnerColor[0]-32) + "+R" // "W+R" or "B+R"
 
 	// Mark game finished
-	h.db.Exec("UPDATE games SET status = 'finished' WHERE id = $1", gameID)
+	if _, err := h.db.Exec("UPDATE games SET status = 'finished' WHERE id = $1", gameID); err != nil {
+		log.Printf("handleResign: mark finished: %v", err)
+	}
 
 	// Broadcast game_over
 	gameOver := map[string]interface{}{
