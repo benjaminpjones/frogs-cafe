@@ -1,0 +1,23 @@
+{
+  "name": "bik-js",
+  "version": "0.1.0",
+  "description": "Baduk InterKonnect protocol library",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jose": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.0",
+    "ajv": "^8.17.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bik.example/schema/ws-client.json",
+  "title": "BIK WebSocket Client Messages",
+  "description": "Messages sent from a player client to the host server",
+  "oneOf": [
+    {
+      "title": "move",
+      "description": "Place a stone or pass",
+      "type": "object",
+      "properties": {
+        "type": { "const": "move" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "pos": { "$ref": "common.json#/$defs/Position" }
+          },
+          "required": ["pos"]
+        }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "resign",
+      "type": "object",
+      "properties": {
+        "type": { "const": "resign" },
+        "data": { "type": "object" }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "mark_dead",
+      "description": "Mark stones as dead during scoring phase",
+      "type": "object",
+      "properties": {
+        "type": { "const": "mark_dead" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "positions": {
+              "type": "array",
+              "items": { "$ref": "common.json#/$defs/Position" }
+            }
+          },
+          "required": ["positions"]
+        }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "score_accept",
+      "description": "Accept the current score",
+      "type": "object",
+      "properties": {
+        "type": { "const": "score_accept" },
+        "data": { "type": "object" }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "score_reject",
+      "description": "Reject the score and resume play",
+      "type": "object",
+      "properties": {
+        "type": { "const": "score_reject" },
+        "data": { "type": "object" }
+      },
+      "required": ["type", "data"]
+    }
+  ]
+}

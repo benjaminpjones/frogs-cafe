@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bik.example/schema/ws-server.json",
+  "title": "BIK WebSocket Server Messages",
+  "description": "Messages broadcast from the host server to all connected clients",
+  "oneOf": [
+    {
+      "title": "game_state",
+      "description": "Full game state — sent immediately on connect and on request",
+      "type": "object",
+      "properties": {
+        "type": { "const": "game_state" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "moves":       {
+              "type": "array",
+              "items": { "$ref": "common.json#/$defs/Position" },
+              "description": "Ordered list of all moves played so far"
+            },
+            "phase":       { "$ref": "common.json#/$defs/GamePhase" },
+            "nextToPlay":  { "$ref": "common.json#/$defs/Color" },
+            "clock":       { "$ref": "common.json#/$defs/Clock" }
+          },
+          "required": ["moves", "phase", "nextToPlay", "clock"]
+        }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "move_played",
+      "description": "A move was accepted and applied",
+      "type": "object",
+      "properties": {
+        "type": { "const": "move_played" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "pos":        { "$ref": "common.json#/$defs/Position" },
+            "moveNumber": { "type": "integer", "minimum": 1 },
+            "color":      { "$ref": "common.json#/$defs/Color" },
+            "captures":   {
+              "type": "array",
+              "items": { "$ref": "common.json#/$defs/Position" }
+            },
+            "nextToPlay": { "$ref": "common.json#/$defs/Color" },
+            "clock":      { "$ref": "common.json#/$defs/Clock" }
+          },
+          "required": ["pos", "moveNumber", "color", "captures", "nextToPlay", "clock"]
+        }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "move_rejected",
+      "description": "A move was rejected by the host",
+      "type": "object",
+      "properties": {
+        "type": { "const": "move_rejected" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "enum": ["ko", "occupied", "suicide", "not_your_turn", "game_not_active"]
+            }
+          },
+          "required": ["reason"]
+        }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "clock",
+      "description": "Periodic clock update",
+      "type": "object",
+      "properties": {
+        "type": { "const": "clock" },
+        "data": { "$ref": "common.json#/$defs/Clock" }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "phase_change",
+      "description": "The game phase has changed",
+      "type": "object",
+      "properties": {
+        "type": { "const": "phase_change" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "phase": { "$ref": "common.json#/$defs/GamePhase" }
+          },
+          "required": ["phase"]
+        }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "dead_stones",
+      "description": "Updated dead stone markings during scoring",
+      "type": "object",
+      "properties": {
+        "type": { "const": "dead_stones" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "positions": {
+              "type": "array",
+              "items": { "$ref": "common.json#/$defs/Position" }
+            }
+          },
+          "required": ["positions"]
+        }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "title": "game_over",
+      "description": "The game has ended",
+      "type": "object",
+      "properties": {
+        "type": { "const": "game_over" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "result": { "$ref": "common.json#/$defs/GameResult" },
+            "winner": { "$ref": "common.json#/$defs/Color" },
+            "scoreBlack": { "type": ["number", "null"] },
+            "scoreWhite": { "type": ["number", "null"] }
+          },
+          "required": ["result", "winner", "scoreBlack", "scoreWhite"]
+        }
+      },
+      "required": ["type", "data"]
+    }
+  ]
+}
