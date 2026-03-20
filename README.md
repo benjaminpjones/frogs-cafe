@@ -2,6 +2,21 @@
 
 A WebSocket-enabled Go (Baduk/Weiqi) game server built with Go and PostgreSQL, featuring a React frontend.
 
+## Federation (BIK)
+
+Frogs Café implements **BIK (Baduk InterKonnect)**, a protocol for playing Go across servers — so a player on frogs.cafe can play against a player on any other BIK-compatible server.
+
+If you want to implement BIK on your own server:
+
+1. **Read the spec** — [`bik/spec/protocol.md`](bik/spec/protocol.md)
+2. **Consume the types** — [`bik/bik-js/`](bik/bik-js/) is a TypeScript library with types, AP activity builders, and a WebSocket client
+3. **Implement** — the five server-side endpoints you need are documented in the spec; frogs.cafe's Go implementation is in [`server/handlers/bik.go`](server/handlers/bik.go) if you want a reference
+
+To run the E2E test (two servers, two databases, full federation flow):
+```bash
+just e2e
+```
+
 ## Project Structure
 
 ```
