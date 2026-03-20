@@ -289,15 +289,28 @@ func (c *Client) readPump() {
 
 		// Handle move type messages
 		if msgType, ok := msg["type"].(string); ok && msgType == "move" {
-			// Only authenticated players can make moves (local: playerID > 0, remote: playerID == -1)
-			if c.playerID == 0 {
+			// Guests cannot make moves
+			if c.playerID == 0 && c.actorURI == "" {
 				log.Printf("Guest attempted to make a move - rejected")
 				continue
 			}
 
+			// Verify the client is actually a participant in this game
+			ok, err := hub.handler.isGameParticipant(c.gameID, c.playerID, c.actorURI)
+			if err != nil || !ok {
+				log.Printf("Move rejected: %s is not a participant in game %s", c.userID, c.gameID)
+				reject := map[string]interface{}{
+					"type": "move_rejected",
+					"data": map[string]string{"reason": "not_your_turn"},
+				}
+				if b, err := json.Marshal(reject); err == nil {
+					c.send <- b
+				}
+				continue
+			}
+
 			if data, ok := msg["data"].(map[string]interface{}); ok {
-				// Use authenticated playerID from JWT, not from message
-				if err := hub.handler.SaveMove(c.gameID, c.playerID, data); err != nil {
+				if err := hub.handler.SaveMove(c.gameID, c.playerID, c.actorURI, data); err != nil {
 					log.Printf("Error saving move: %v", err)
 					continue
 				}

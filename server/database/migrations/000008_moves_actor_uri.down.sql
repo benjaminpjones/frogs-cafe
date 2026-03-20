@@ -1,0 +1,3 @@
+ALTER TABLE moves
+    ALTER COLUMN player_id SET NOT NULL,
+    DROP COLUMN IF EXISTS actor_uri;

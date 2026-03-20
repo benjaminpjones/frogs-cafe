@@ -13,7 +13,32 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (h *Handler) SaveMove(gameIDStr string, playerID int, data map[string]interface{}) error {
+// isGameParticipant returns true if the given player (by local ID or actor URI) is a participant in the game.
+func (h *Handler) isGameParticipant(gameIDStr string, playerID int, actorURI string) (bool, error) {
+	gameID, err := strconv.Atoi(gameIDStr)
+	if err != nil {
+		return false, err
+	}
+	var count int
+	if actorURI != "" {
+		// Remote player: check actor URI against federated columns
+		err = h.db.QueryRow(`
+			SELECT COUNT(*) FROM games
+			WHERE id = $1 AND status = 'active'
+			AND (black_actor_uri = $2 OR white_actor_uri = $2)
+		`, gameID, actorURI).Scan(&count)
+	} else {
+		// Local player: check player ID against local columns
+		err = h.db.QueryRow(`
+			SELECT COUNT(*) FROM games
+			WHERE id = $1 AND status = 'active'
+			AND (black_player_id = $2 OR white_player_id = $2)
+		`, gameID, playerID).Scan(&count)
+	}
+	return count > 0, err
+}
+
+func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data map[string]interface{}) error {
 	gameID, err := strconv.Atoi(gameIDStr)
 	if err != nil {
 		return err
@@ -22,7 +47,6 @@ func (h *Handler) SaveMove(gameIDStr string, playerID int, data map[string]inter
 	x := int(data["x"].(float64))
 	y := int(data["y"].(float64))
 
-	// Get the current move number
 	var moveNumber int
 	err = h.db.QueryRow(
 		"SELECT COALESCE(MAX(move_number), 0) + 1 FROM moves WHERE game_id = $1",
@@ -32,11 +56,18 @@ func (h *Handler) SaveMove(gameIDStr string, playerID int, data map[string]inter
 		return err
 	}
 
-	// Insert the move
-	_, err = h.db.Exec(
-		"INSERT INTO moves (game_id, player_id, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
-		gameID, playerID, moveNumber, x, y,
-	)
+	if actorURI != "" {
+		// Remote player: store actor_uri, leave player_id null
+		_, err = h.db.Exec(
+			"INSERT INTO moves (game_id, actor_uri, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
+			gameID, actorURI, moveNumber, x, y,
+		)
+	} else {
+		_, err = h.db.Exec(
+			"INSERT INTO moves (game_id, player_id, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
+			gameID, playerID, moveNumber, x, y,
+		)
+	}
 	return err
 }
 
