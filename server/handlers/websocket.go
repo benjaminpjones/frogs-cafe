@@ -1,14 +1,18 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"frogs_cafe/auth"
+	"frogs_cafe/bik"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -22,11 +26,12 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	conn     *websocket.Conn
-	send     chan []byte
-	gameID   string
-	userID   string
-	playerID int
+	conn      *websocket.Conn
+	send      chan []byte
+	gameID    string
+	userID    string
+	playerID  int    // local player ID; -1 for remote (BIK) players
+	actorURI  string // set for remote players authenticated via BIK token
 }
 
 type Hub struct {
@@ -110,7 +115,6 @@ func (h *Hub) run() {
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Get token from query parameter or header
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
@@ -119,23 +123,36 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Token is now optional - guests can view without authentication
+	// Game ID from URL path (/ws/games/{gameID}) or query param (legacy)
+	gameID := chi.URLParam(r, "gameID")
+	if gameID == "" {
+		gameID = r.URL.Query().Get("game_id")
+	}
+
 	var playerID int
 	var username string
-	var err error
+	var actorURI string
 
 	if token != "" {
-		// Validate session token
+		// Try local session token first
+		var err error
 		playerID, username, err = auth.ValidateSession(h.db.DB, token)
 		if err != nil {
-			log.Printf("Token validation failed: %v", err)
-			// Continue as guest instead of returning error
-			playerID = 0
-			username = "guest"
+			// Try BIK token (remote player)
+			bikTok, bikErr := h.verifyBIKToken(token, gameID)
+			if bikErr != nil {
+				log.Printf("WS auth failed — session: %v; bik: %v", err, bikErr)
+				// Fall through as guest
+			} else {
+				actorURI = bikTok.Player
+				username = bikTok.Player
+				playerID = -1 // sentinel: remote player
+				log.Printf("Remote player authenticated via BIK token: %s", actorURI)
+			}
 		}
-	} else {
-		// Guest viewer
-		playerID = 0
+	}
+
+	if playerID == 0 && actorURI == "" {
 		username = "guest"
 	}
 
@@ -148,15 +165,60 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	client := &Client{
 		conn:     conn,
 		send:     make(chan []byte, 256),
-		gameID:   r.URL.Query().Get("game_id"),
+		gameID:   gameID,
 		userID:   username,
 		playerID: playerID,
+		actorURI: actorURI,
 	}
 
 	hub.register <- client
 
 	go client.writePump()
 	go client.readPump()
+}
+
+// verifyBIKToken parses and verifies a BIK token issued by a remote server.
+func (h *Handler) verifyBIKToken(token, gameID string) (*bik.BikToken, error) {
+	// Decode payload without verifying (to extract the player's server domain)
+	dotIdx := strings.LastIndex(token, ".")
+	if dotIdx < 0 {
+		return nil, fmt.Errorf("malformed BIK token")
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(token[:dotIdx])
+	if err != nil {
+		return nil, fmt.Errorf("decode BIK token payload: %w", err)
+	}
+	var t bik.BikToken
+	if err := json.Unmarshal(payloadBytes, &t); err != nil {
+		return nil, fmt.Errorf("unmarshal BIK token: %w", err)
+	}
+
+	// Extract server domain from player handle (@user@domain)
+	parts := strings.Split(strings.TrimPrefix(t.Player, "@"), "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid player handle in BIK token: %s", t.Player)
+	}
+	domain := parts[1]
+
+	// Fetch remote server's public key (cached)
+	pubKey, err := h.keyCache.FetchPublicKey(domain)
+	if err != nil {
+		return nil, fmt.Errorf("fetch public key for %s: %w", domain, err)
+	}
+
+	// Verify signature and expiry
+	verified, err := bik.VerifyToken(token, pubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Confirm the token is for this game
+	expectedGameURI := fmt.Sprintf("%s/games/%s", h.cfg.BaseURL, gameID)
+	if verified.Game != expectedGameURI {
+		return nil, fmt.Errorf("BIK token game mismatch: got %s, want %s", verified.Game, expectedGameURI)
+	}
+
+	return verified, nil
 }
 
 func (c *Client) readPump() {
@@ -227,7 +289,7 @@ func (c *Client) readPump() {
 
 		// Handle move type messages
 		if msgType, ok := msg["type"].(string); ok && msgType == "move" {
-			// Only authenticated players can make moves
+			// Only authenticated players can make moves (local: playerID > 0, remote: playerID == -1)
 			if c.playerID == 0 {
 				log.Printf("Guest attempted to make a move - rejected")
 				continue
