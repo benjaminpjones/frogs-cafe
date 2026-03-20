@@ -91,6 +91,81 @@ client.send({ type: "score_accept", data: {} });
 client.send({ type: "score_reject", data: {} });
 ```
 
+## Matchmaking (ActivityPub)
+
+BIK uses ActivityPub for challenge advertisement and acceptance. Use the activity builders to construct valid AP payloads, then POST them to the target server's inbox.
+
+### Advertising a challenge
+
+```ts
+import { buildCreateChallenge, postActivity } from "bik-js";
+
+const activity = buildCreateChallenge(
+  "https://frogs.cafe/users/alice",           // your actor URI
+  "https://frogs.cafe/challenges/abc123",     // challenge URI (you mint this)
+  {
+    type: "BikChallenge",
+    boardSize: 19,
+    timeControl: { system: "byoyomi", mainTime: 600, periods: 5, periodTime: 30 },
+    colorPreference: "any",
+    expiresAt: "2024-03-10T15:30:00Z",
+  },
+  "Looking for a game! 19x19, 10min + 5x30s byo-yomi",
+);
+
+// Broadcast to your followers / federate as needed
+```
+
+### Accepting a challenge
+
+```ts
+import { buildAcceptChallenge, postActivity } from "bik-js";
+
+const activity = buildAcceptChallenge(
+  "https://server-b.example/users/bob",       // your actor URI
+  "https://server-a.example/challenges/abc123", // URI of the challenge
+);
+
+await postActivity("https://server-a.example/inbox", activity);
+// Server A responds with a CreateGame activity containing the WebSocket URL
+```
+
+### Withdrawing a challenge
+
+When a challenge is accepted or cancelled, the host sends an `Undo` so other servers can remove it from open challenge lists.
+
+```ts
+import { buildUndoChallenge, postActivity } from "bik-js";
+
+const activity = buildUndoChallenge(
+  "https://server-a.example/users/alice",
+  "https://server-a.example/challenges/abc123",
+);
+
+// Broadcast to followers
+```
+
+### Announcing a game result
+
+```ts
+import { buildCreateGameResult, postActivity } from "bik-js";
+
+const activity = buildCreateGameResult(
+  "https://server-a.example/users/alice",
+  "https://server-a.example/games/xyz789/result",
+  "https://server-a.example/games/xyz789",
+  {
+    type: "BikGameResult",
+    winner: "https://server-a.example/users/alice",
+    result: "B+R",
+    sgf: "https://server-a.example/games/xyz789.sgf",
+  },
+  "@alice (B) defeated @bob@server-b.example (W) by resignation.",
+);
+```
+
+Results are standard AP `Note` objects and will appear as posts on Mastodon and other ActivityPub clients.
+
 ## Types
 
 All types are exported from the package root:
