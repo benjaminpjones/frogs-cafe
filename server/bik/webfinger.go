@@ -53,8 +53,18 @@ func (c *KeyCache) FetchPublicKey(serverDomain string) (ed25519.PublicKey, error
 }
 
 func fetchRemoteKey(client *http.Client, serverDomain string) (ed25519.PublicKey, error) {
-	keysURL := fmt.Sprintf("https://%s/.well-known/bik/keys", serverDomain)
-	resp, err := client.Get(keysURL)
+	// Try https first (production), fall back to http (development/e2e)
+	var (
+		resp *http.Response
+		err  error
+	)
+	for _, scheme := range []string{"https", "http"} {
+		keysURL := fmt.Sprintf("%s://%s/.well-known/bik/keys", scheme, serverDomain)
+		resp, err = client.Get(keysURL)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("bik: fetch keys from %s: %w", serverDomain, err)
 	}

@@ -38,14 +38,28 @@ func (h *Handler) isGameParticipant(gameIDStr string, playerID int, actorURI str
 	return count > 0, err
 }
 
-func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data map[string]interface{}) error {
+// SaveMove saves a move to the database and returns the move number.
+func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data map[string]interface{}) (int, error) {
 	gameID, err := strconv.Atoi(gameIDStr)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	x := int(data["x"].(float64))
-	y := int(data["y"].(float64))
+	// Support BIK coordinate format: pos: [col, row]
+	// Fall back to legacy x/y fields for backwards compatibility
+	var x, y int
+	if pos, ok := data["pos"]; ok {
+		if pos == nil {
+			// pass — store as -1,-1
+			x, y = -1, -1
+		} else if arr, ok := pos.([]interface{}); ok && len(arr) == 2 {
+			x = int(arr[0].(float64))
+			y = int(arr[1].(float64))
+		}
+	} else {
+		x = int(data["x"].(float64))
+		y = int(data["y"].(float64))
+	}
 
 	var moveNumber int
 	err = h.db.QueryRow(
@@ -53,7 +67,7 @@ func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data
 		gameID,
 	).Scan(&moveNumber)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if actorURI != "" {
@@ -68,7 +82,60 @@ func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data
 			gameID, playerID, moveNumber, x, y,
 		)
 	}
-	return err
+	return moveNumber, err
+}
+
+func (h *Handler) handleResign(c *Client) {
+	gameID := c.gameID
+
+	// Determine winner (the other participant)
+	var blackPlayerID *int
+	var whitePlayerID *int
+	var blackActorURI, whiteActorURI string
+	h.db.QueryRow(`
+		SELECT black_player_id, white_player_id,
+		       COALESCE(black_actor_uri, ''), COALESCE(white_actor_uri, '')
+		FROM games WHERE id = $1
+	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI)
+
+	// Figure out who resigned and who won
+	var winnerColor string
+	resignerIsBlack := (c.playerID > 0 && blackPlayerID != nil && *blackPlayerID == c.playerID) ||
+		(c.actorURI != "" && blackActorURI == c.actorURI)
+	if resignerIsBlack {
+		winnerColor = "white"
+	} else {
+		winnerColor = "black"
+	}
+
+	result := string(winnerColor[0]-32) + "+R" // "W+R" or "B+R"
+
+	// Mark game finished
+	h.db.Exec("UPDATE games SET status = 'finished' WHERE id = $1", gameID)
+
+	// Broadcast game_over
+	gameOver := map[string]interface{}{
+		"type": "game_over",
+		"data": map[string]interface{}{
+			"result":     result,
+			"winner":     winnerColor,
+			"scoreBlack": nil,
+			"scoreWhite": nil,
+		},
+	}
+	if b, err := json.Marshal(gameOver); err == nil {
+		// Send to all clients watching this game
+		hub.mutex.RLock()
+		for client := range hub.clients {
+			if client.gameID == gameID {
+				select {
+				case client.send <- b:
+				default:
+				}
+			}
+		}
+		hub.mutex.RUnlock()
+	}
 }
 
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {

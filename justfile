@@ -13,7 +13,8 @@ install:
 
 # Run BIK E2E test (two servers, two databases, full federation flow)
 e2e:
-	docker compose -f bik/e2e/docker-compose.yml run --rm test; \
+	docker compose -f bik/e2e/docker-compose.yml down -v --remove-orphans
+	docker compose -f bik/e2e/docker-compose.yml run --rm --build test; \
 	docker compose -f bik/e2e/docker-compose.yml down -v
 
 # Run server and client in split tmux session with hot reload

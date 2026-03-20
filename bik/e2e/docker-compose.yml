@@ -48,7 +48,7 @@ services:
     working_dir: /app
     volumes:
       - ../../bik:/app
-    command: sh -c "cd /app/bik-js && npm install --silent && npx tsx /app/e2e/test.ts"
+    command: sh -c "cd /app/bik-js && npm install --silent && NODE_PATH=/app/bik-js/node_modules npx tsx /app/e2e/test.ts"
     depends_on:
       - server-a
       - server-b

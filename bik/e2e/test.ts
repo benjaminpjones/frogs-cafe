@@ -65,8 +65,10 @@ async function createChallenge(server: string, token: string) {
   return res.json() as Promise<{ object: { id: string } }>;
 }
 
-async function getBIKToken(server: string, token: string, gameID: string) {
-  const res = await fetch(`${server}/api/v1/bik/token/${gameID}`, {
+async function getBIKToken(server: string, token: string, gameID: string, gameURI?: string) {
+  const url = new URL(`${server}/api/v1/bik/token/${gameID}`);
+  if (gameURI) url.searchParams.set("gameURI", gameURI);
+  const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -87,6 +89,7 @@ function connectAndCollect(url: string, token: string): { messages: ServerMessag
 
 // ---- main ----
 
+async function main() {
 console.log("Waiting for servers...");
 await waitForServer(A);
 await waitForServer(B);
@@ -117,9 +120,9 @@ console.log(`  Black: ${game.black}`);
 console.log(`  White: ${game.white}`);
 console.log(`  WebSocket: ${game.websocket}\n`);
 
-// 4. Bob gets a BIK token from server B
+// 4. Bob gets a BIK token from server B (game lives on server A, pass the URI)
 console.log("Bob gets a BIK token from server B...");
-const bikToken = await getBIKToken(B, bobToken, gameID);
+const bikToken = await getBIKToken(B, bobToken, gameID, game.url);
 console.log("✓ BIK token issued\n");
 
 // 5. Both connect to server A's WebSocket
@@ -163,3 +166,6 @@ alice.close();
 bob.close();
 
 console.log("🎉 E2E test passed — two servers, real WebSocket, real database");
+}
+
+main().catch((e) => { console.error("E2E FAILED:", e.message); process.exit(1); });

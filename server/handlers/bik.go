@@ -279,10 +279,15 @@ func (h *Handler) GetBIKToken(w http.ResponseWriter, r *http.Request) {
 	var username string
 	h.db.QueryRow("SELECT username FROM players WHERE id = $1", playerID).Scan(&username)
 
-	gameURI := fmt.Sprintf("%s/games/%s", h.cfg.BaseURL, gameID)
-	handle := fmt.Sprintf("@%s@%s", username, strings.TrimPrefix(strings.TrimPrefix(h.cfg.BaseURL, "https://"), "http://"))
+	// Allow caller to provide the full game URI for cross-server games.
+	// Falls back to this server's own game URI if not specified.
+	gameURI := r.URL.Query().Get("gameURI")
+	if gameURI == "" {
+		gameURI = fmt.Sprintf("%s/games/%s", h.cfg.BaseURL, gameID)
+	}
+	actorURI := fmt.Sprintf("%s/users/%s", h.cfg.BaseURL, username)
 
-	token, err := h.bikKeys.SignToken(handle, gameURI, 5*time.Minute)
+	token, err := h.bikKeys.SignToken(actorURI, gameURI, 5*time.Minute)
 	if err != nil {
 		http.Error(w, "failed to sign token", http.StatusInternalServerError)
 		return
