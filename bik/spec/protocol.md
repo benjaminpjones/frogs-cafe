@@ -145,24 +145,143 @@ The guest player needs to authenticate to the host's WebSocket. Flow:
 
 Local players authenticate with their usual session token.
 
+### Coordinates
+
+Board positions are `[col, row]` zero-indexed integer arrays. `[0, 0]` is the top-left corner. This works for any board size.
+
+Examples: `[0, 0]` (top-left), `[18, 18]` (bottom-right on 19x19), `[52, 52]` (bottom-right on 53x53).
+
+Pass is represented as `null`.
+
 ### WebSocket Messages
 
-Once connected, standard game messages flow:
+All messages share a common envelope:
 
 ```json
-{"type": "move", "data": {"x": 3, "y": 4, "moveNumber": 1}}
-{"type": "pass", "data": {"moveNumber": 42}}
-{"type": "resign", "data": {}}
-{"type": "clock", "data": {"black": 542, "white": 600}}
+{"type": "<message-type>", "data": { ... }}
 ```
 
-All clients (local and remote) receive the same broadcasts from the host.
+#### Client → Host
+
+| Type | Description |
+|------|-------------|
+| `move` | Place a stone or pass |
+| `resign` | Forfeit the game |
+| `mark_dead` | Mark stones as dead during scoring |
+| `score_accept` | Accept the current score |
+| `score_reject` | Reject score (resume play) |
+
+**`move`**
+```json
+{"type": "move", "data": {"pos": [3, 3]}}
+{"type": "move", "data": {"pos": null}}
+```
+
+**`resign`**
+```json
+{"type": "resign", "data": {}}
+```
+
+**`mark_dead`** *(scoring phase only)*
+```json
+{"type": "mark_dead", "data": {"positions": [[3, 3], [4, 3], [4, 4]]}}
+```
+
+**`score_accept`** / **`score_reject`**
+```json
+{"type": "score_accept", "data": {}}
+{"type": "score_reject", "data": {}}
+```
+
+#### Host → All Clients
+
+| Type | Description |
+|------|-------------|
+| `game_state` | Full game state (sent on connect/reconnect) |
+| `move_played` | A move was accepted and played |
+| `move_rejected` | A move was rejected |
+| `clock` | Current clock state |
+| `phase_change` | Game phase changed (e.g. active → scoring) |
+| `dead_stones` | Updated dead stone markings |
+| `game_over` | Game has ended |
+
+**`game_state`** — sent immediately on connection so clients can sync
+```json
+{
+  "type": "game_state",
+  "data": {
+    "moves": ["D4", "Q16", "pass"],
+    "phase": "active",
+    "clock": { ... },
+    "nextToPlay": "black"
+  }
+}
+```
+
+**`move_played`**
+```json
+{
+  "type": "move_played",
+  "data": {
+    "pos": [3, 3],
+    "moveNumber": 47,
+    "color": "black",
+    "captures": [[3, 4]],
+    "nextToPlay": "white"
+  }
+}
+```
+
+**`move_rejected`**
+```json
+{
+  "type": "move_rejected",
+  "data": {"reason": "ko"}
+}
+```
+Possible reasons: `ko`, `occupied`, `suicide`, `not_your_turn`, `game_not_active`.
+
+**`phase_change`**
+```json
+{"type": "phase_change", "data": {"phase": "scoring"}}
+```
+Phases: `active`, `scoring`, `finished`.
+
+**`game_over`**
+```json
+{
+  "type": "game_over",
+  "data": {
+    "result": "B+R",
+    "winner": "black",
+    "scoreBlack": null,
+    "scoreWhite": null
+  }
+}
+```
+`result` follows SGF convention: `B+R` (black wins by resignation), `W+3.5` (white wins by 3.5 points), `B+T` (black wins on time).
 
 ### Clock Sync
 
-The host is authoritative for time. Clients receive periodic `clock` messages. On move receipt, host broadcasts updated clock state.
+The host is authoritative for time. A `clock` message is broadcast after every move and periodically during play.
 
-For blitz games, clients should display server time, not local calculations.
+**`clock`** format varies by time system:
+
+```json
+{"type": "clock", "data": {"system": "byoyomi", "black": {"main": 542, "periods": 4, "periodTime": 30}, "white": {"main": 600, "periods": 5, "periodTime": 30}, "activeColor": "black"}}
+```
+```json
+{"type": "clock", "data": {"system": "fischer", "black": 312, "white": 480, "increment": 10, "activeColor": "white"}}
+```
+```json
+{"type": "clock", "data": {"system": "absolute", "black": 215, "white": 430, "activeColor": "black"}}
+```
+
+The host is the source of truth for time. If no `clock` message arrives within 5 seconds during active play, clients should request `game_state` to resync.
+
+### Reconnection
+
+Clients may disconnect and reconnect at any time. On reconnect, the host sends a `game_state` message immediately, giving the full move list and current clock. Clients should treat `game_state` as authoritative and discard any locally cached state.
 
 ## Game Completion
 
