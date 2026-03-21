@@ -107,7 +107,7 @@ const activity = buildCreateChallenge(
     type: "BikChallenge",
     boardSize: 19,
     timeControl: { system: "byoyomi", mainTime: 600, periods: 5, periodTime: 30 },
-    colorPreference: "any",
+    colorAssignment: "random",
     expiresAt: "2024-03-10T15:30:00Z",
   },
   "Looking for a game! 19x19, 10min + 5x30s byo-yomi",

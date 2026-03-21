@@ -258,10 +258,10 @@ func (h *Handler) verifyBIKToken(token, gameID string) (*bik.BikToken, error) {
 	}
 	domain := playerURL.Host
 
-	// Fetch remote server's public key (cached)
-	pubKey, err := h.keyCache.FetchPublicKey(domain)
+	// Fetch remote server's public key by kid (re-fetches on unknown kid)
+	pubKey, err := h.keyCache.FetchPublicKey(domain, t.Kid)
 	if err != nil {
-		return nil, fmt.Errorf("fetch public key for %s: %w", domain, err)
+		return nil, fmt.Errorf("fetch public key for %s kid %q: %w", domain, t.Kid, err)
 	}
 
 	// Verify signature and expiry

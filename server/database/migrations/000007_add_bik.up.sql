@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS bik_challenges (
     uri         TEXT NOT NULL UNIQUE,
     board_size  INTEGER NOT NULL DEFAULT 19,
     time_control JSONB NOT NULL,
-    color_pref  VARCHAR(10) NOT NULL DEFAULT 'any',
+    color_assignment VARCHAR(10) NOT NULL DEFAULT 'random',
     status      VARCHAR(20) NOT NULL DEFAULT 'open', -- open, accepted, cancelled
     expires_at  TIMESTAMP NOT NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP

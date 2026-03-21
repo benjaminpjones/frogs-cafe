@@ -25,6 +25,11 @@ Once a game begins, all gameplay flows through the host. The guest server may ob
 
 Challenges use ActivityPub activities for federation.
 
+All BIK activities MUST include `to` and `cc` for correct AP delivery routing:
+- Public broadcasts (challenges, game announcements, results): `to: [Public]`, `cc` includes the actor's followers collection and any directly addressed participants
+- Directed activities (Accept, direct challenges): `to` contains only the addressed actor(s), no `cc` required
+- The followers collection URL is discovered from the actor document (`followers` field)
+
 ### 1. Create Challenge
 
 A player creates an open challenge on their server.
@@ -34,6 +39,8 @@ A player creates an open challenge on their server.
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Create",
   "actor": "https://server-a.example/users/alice",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://server-a.example/users/alice/followers"],
   "object": {
     "type": "Note",
     "id": "https://server-a.example/challenges/abc123",
@@ -48,7 +55,8 @@ A player creates an open challenge on their server.
         "periods": 5,
         "periodTime": 30
       },
-      "colorPreference": "any",
+      "colorAssignment": "random",
+      "komi": 6.5,
       "expiresAt": "2024-03-10T15:30:00Z"
     }
   }
@@ -57,7 +65,42 @@ A player creates an open challenge on their server.
 
 The `Note` is renderable by standard ActivityPub clients (Mastodon, etc). The `attachment` contains machine-readable game parameters.
 
+Challenges MAY be directed at a specific player instead of broadcast publicly. A direct challenge addresses the target actor in `to` and omits `Public`:
+
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Create",
+  "actor": "https://server-a.example/users/alice",
+  "to": ["https://server-b.example/users/bob"],
+  "object": {
+    "type": "Note",
+    "id": "https://server-a.example/challenges/abc123",
+    "attributedTo": "https://server-a.example/users/alice",
+    "content": "Hey @bob@server-b.example, want a game? 19x19, 10min + 5x30s byo-yomi",
+    "attachment": {
+      "type": "BikChallenge",
+      "boardSize": 19,
+      "timeControl": { "system": "byoyomi", "mainTime": 600, "periods": 5, "periodTime": 30 },
+      "colorAssignment": "random",
+      "expiresAt": "2024-03-10T15:30:00Z"
+    }
+  }
+}
+```
+
+Servers receiving a direct challenge SHOULD only allow the addressed player to accept it. Clients can determine challenge visibility by inspecting `to`: if it contains `https://www.w3.org/ns/activitystreams#Public` the challenge is open; otherwise it is direct.
+
 Challenges expire at `expiresAt`. Servers SHOULD reject `Accept` activities for expired challenges.
+
+`komi` is the point compensation given to white. If omitted, it defaults to `0`. Negative values are valid.
+
+`colorAssignment` determines how colors are assigned when the challenge is accepted:
+- `"black"` — the challenger (the player who created the challenge) plays black
+- `"white"` — the challenger plays white
+- `"random"` — the host assigns colors randomly on accept
+
+<!-- TODO: rating-based color assignment (stronger player takes white) — requires rating exchange between servers -->
 
 ### 2. Accept Challenge
 
@@ -68,6 +111,7 @@ A remote player accepts:
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Accept",
   "actor": "https://server-b.example/users/bob",
+  "to": ["https://server-a.example/users/alice"],
   "object": "https://server-a.example/challenges/abc123"
 }
 ```
@@ -83,6 +127,8 @@ When a challenge is accepted or the creator cancels it, the host broadcasts an `
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Undo",
   "actor": "https://server-a.example/users/alice",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://server-a.example/users/alice/followers"],
   "object": "https://server-a.example/challenges/abc123"
 }
 ```
@@ -98,6 +144,8 @@ Host notifies both parties and their followers:
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Create",
   "actor": "https://server-a.example/users/alice",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://server-a.example/users/alice/followers", "https://server-b.example/users/bob"],
   "object": {
     "type": "Note",
     "id": "https://server-a.example/games/xyz789",
@@ -105,17 +153,17 @@ Host notifies both parties and their followers:
     "inReplyTo": "https://server-a.example/challenges/abc123",
     "attachment": {
       "type": "BikGame",
-      "id": "xyz789",
+      "id": "https://server-a.example/games/xyz789",
       "black": "https://server-a.example/users/alice",
       "white": "https://server-b.example/users/bob",
-      "url": "https://server-a.example/games/xyz789",
+      "komi": 6.5,
       "websocket": "wss://server-a.example/ws/games/xyz789"
     }
   }
 }
 ```
 
-The `url` is a human-readable page to watch the game. The `websocket` is for live clients.
+`BikGame.id` is the canonical game URI — both its AP identifier and the human-readable page. The `websocket` is for live clients.
 
 ## Gameplay
 
@@ -123,25 +171,38 @@ The `url` is a human-readable page to watch the game. The `websocket` is for liv
 
 The guest player needs to authenticate to the host's WebSocket. Flow:
 
-1. Guest server issues a **signed token** for its player:
+1. Guest player requests a signed token from **their own server**:
+   ```
+   POST /api/v1/bik/token?gameURI=https://server-a.example/games/xyz789
+   Authorization: <normal session credential>
+   ```
+   Response:
+   ```json
+   { "token": "<signed-jwt>" }
+   ```
+   The token payload is:
    ```json
    {
-     "player": "@bob@server-b.example",
+     "kid": "a3f2c1b4e5d6f7a8",
+     "player": "https://server-b.example/users/bob",
      "game": "https://server-a.example/games/xyz789",
      "exp": 1710000000
    }
    ```
-   Signed with the guest server's private key.
+   Signed with the guest server's private key. Tokens MUST have a short expiry (recommended: 5 minutes).
 
 2. Guest player connects to host WebSocket with token:
    ```
-   wss://server-a.example/ws/games/xyz789?token=<base64-encoded-token>
+   wss://server-a.example/ws/games/xyz789?token=<signed-jwt>
    ```
 
 3. Host verifies token by:
-   - Fetching guest server's public key (via `/.well-known/bik/keys`, cached)
-   - Validating signature and expiry
-   - Confirming player matches game participant
+   - Decoding the payload (base64, no key required) to read `player` and `kid`
+   - Extracting the guest server's domain from the `player` actor URI
+   - Fetching the guest server's JWK set (via `/.well-known/bik/keys`, cached) and selecting the key matching `kid` — re-fetching if `kid` is unknown
+   - Verifying the signature against that public key
+   - Confirming expiry has not passed
+   - Confirming `player` matches a participant in the named game
 
 Local players authenticate with their usual session token.
 
@@ -210,7 +271,7 @@ All messages share a common envelope:
 {
   "type": "game_state",
   "data": {
-    "moves": ["D4", "Q16", "pass"],
+    "moves": [[3, 3], [15, 2], null],
     "phase": "active",
     "clock": { ... },
     "nextToPlay": "black"
@@ -227,7 +288,8 @@ All messages share a common envelope:
     "moveNumber": 47,
     "color": "black",
     "captures": [[3, 4]],
-    "nextToPlay": "white"
+    "nextToPlay": "white",
+    "clock": {"system": "byoyomi", "black": {"main": 542, "periods": 4, "periodTime": 30}, "white": {"main": 600, "periods": 5, "periodTime": 30}, "activeColor": "white"}
   }
 }
 ```
@@ -292,6 +354,8 @@ When the game ends, host publishes result via ActivityPub:
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Create",
   "actor": "https://server-a.example/users/alice",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://server-a.example/users/alice/followers", "https://server-b.example/users/bob"],
   "object": {
     "type": "Note",
     "id": "https://server-a.example/games/xyz789/result",
@@ -333,6 +397,29 @@ Returns:
 }
 ```
 
+### Actor Document
+
+The actor URI returned by WebFinger MUST dereference to an AP actor document:
+
+```
+GET https://server-a.example/users/alice
+Accept: application/activity+json
+```
+
+Returns:
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Person",
+  "id": "https://server-a.example/users/alice",
+  "preferredUsername": "alice",
+  "inbox": "https://server-a.example/bik/inbox",
+  "followers": "https://server-a.example/users/alice/followers"
+}
+```
+
+The `inbox` field is where AP activities (e.g. `Accept`) must be delivered. The `followers` collection URL is used by AP servers to fan out public activities to followers.
+
 ### Server Keys
 
 For token verification, servers expose public keys at a well-known endpoint:
@@ -341,7 +428,17 @@ For token verification, servers expose public keys at a well-known endpoint:
 GET /.well-known/bik/keys
 ```
 
-Returns JWK set for signature verification.
+Returns a JWK set for signature verification. Each key MUST include a `kid` (key ID) field:
+
+```json
+{
+  "keys": [
+    { "kty": "OKP", "crv": "Ed25519", "kid": "key-1", "x": "<base64url>" }
+  ]
+}
+```
+
+Signed tokens MUST include the `kid` of the signing key. When a verifying server encounters an unknown `kid`, it MUST re-fetch `/.well-known/bik/keys` rather than rejecting the token immediately — the signing server may have rotated keys. Servers rotating keys SHOULD retain the old key in the JWK set for at least 10 minutes to allow in-flight tokens to drain.
 
 ## Security Considerations
 
@@ -349,7 +446,7 @@ Returns JWK set for signature verification.
 - Tokens MUST have short expiry (recommend: 5 minutes)
 - Servers SHOULD rate-limit incoming federation requests
 - Hosts MUST validate that move submitters are game participants
-- Servers SHOULD implement HTTP Signatures for server-to-server requests (per ActivityPub spec)
+- Servers MUST implement HTTP Signatures for server-to-server requests (per ActivityPub spec) — without this, a malicious actor could spoof AP activities (e.g. fake Accept) to any BIK inbox
 
 ## Future Extensions
 

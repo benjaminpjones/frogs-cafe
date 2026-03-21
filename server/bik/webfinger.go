@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// KeyCache fetches and caches remote server public keys.
+// KeyCache fetches and caches remote server public keys, keyed by kid.
 type KeyCache struct {
 	mu      sync.RWMutex
 	entries map[string]keyCacheEntry
@@ -19,7 +19,7 @@ type KeyCache struct {
 }
 
 type keyCacheEntry struct {
-	key       ed25519.PublicKey
+	keys      map[string]ed25519.PublicKey // kid → public key
 	fetchedAt time.Time
 }
 
@@ -32,27 +32,37 @@ func NewKeyCache() *KeyCache {
 	}
 }
 
-// FetchPublicKey returns the Ed25519 public key for a remote BIK server.
-func (c *KeyCache) FetchPublicKey(serverDomain string) (ed25519.PublicKey, error) {
+// FetchPublicKey returns the Ed25519 public key for a given kid on a remote BIK server.
+// If the kid is not in the cache, the key set is re-fetched before failing — the remote
+// server may have rotated keys since the last fetch.
+func (c *KeyCache) FetchPublicKey(serverDomain, kid string) (ed25519.PublicKey, error) {
 	c.mu.RLock()
 	entry, ok := c.entries[serverDomain]
 	c.mu.RUnlock()
 	if ok && time.Since(entry.fetchedAt) < keyCacheTTL {
-		return entry.key, nil
+		if key, found := entry.keys[kid]; found {
+			return key, nil
+		}
+		// kid not found — fall through to re-fetch (server may have rotated)
 	}
 
-	key, err := fetchRemoteKey(c.client, serverDomain)
+	keys, err := fetchRemoteKeys(c.client, serverDomain)
 	if err != nil {
 		return nil, err
 	}
 
 	c.mu.Lock()
-	c.entries[serverDomain] = keyCacheEntry{key: key, fetchedAt: time.Now()}
+	c.entries[serverDomain] = keyCacheEntry{keys: keys, fetchedAt: time.Now()}
 	c.mu.Unlock()
+
+	key, found := keys[kid]
+	if !found {
+		return nil, fmt.Errorf("bik: key %q not found at %s", kid, serverDomain)
+	}
 	return key, nil
 }
 
-func fetchRemoteKey(client *http.Client, serverDomain string) (ed25519.PublicKey, error) {
+func fetchRemoteKeys(client *http.Client, serverDomain string) (map[string]ed25519.PublicKey, error) {
 	// Try https first (production), fall back to http (development/e2e)
 	var (
 		resp *http.Response
@@ -79,16 +89,21 @@ func fetchRemoteKey(client *http.Client, serverDomain string) (ed25519.PublicKey
 		return nil, fmt.Errorf("bik: decode JWK set: %w", err)
 	}
 
+	keys := make(map[string]ed25519.PublicKey)
 	for _, jwk := range jwks.Keys {
-		if jwk.Kty == "OKP" && jwk.Crv == "Ed25519" {
-			raw, err := base64.RawURLEncoding.DecodeString(jwk.X)
-			if err != nil {
-				return nil, fmt.Errorf("bik: decode public key: %w", err)
-			}
-			return ed25519.PublicKey(raw), nil
+		if jwk.Kty != "OKP" || jwk.Crv != "Ed25519" {
+			continue
 		}
+		raw, err := base64.RawURLEncoding.DecodeString(jwk.X)
+		if err != nil {
+			return nil, fmt.Errorf("bik: decode public key %q: %w", jwk.Kid, err)
+		}
+		keys[jwk.Kid] = ed25519.PublicKey(raw)
 	}
-	return nil, fmt.Errorf("bik: no Ed25519 key found at %s", serverDomain)
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("bik: no Ed25519 keys found at %s", serverDomain)
+	}
+	return keys, nil
 }
 
 // LookupActor resolves a @user@domain handle to an AP actor URI via WebFinger.

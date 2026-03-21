@@ -4,16 +4,17 @@ export interface BikChallenge {
   type: "BikChallenge";
   boardSize: number;
   timeControl: TimeControl;
-  colorPreference: "black" | "white" | "any";
+  colorAssignment: "black" | "white" | "random";
+  komi?: number;     // default 0
   expiresAt: string; // ISO 8601
 }
 
 export interface BikGame {
   type: "BikGame";
-  id: string;
+  id: string;        // full game URI (human-readable page)
   black: string;     // actor URI
   white: string;     // actor URI
-  url: string;       // human-readable game page
+  komi?: number;     // default 0
   websocket: string; // wss:// URL
 }
 
@@ -28,6 +29,8 @@ export interface CreateChallengeActivity {
   "@context": "https://www.w3.org/ns/activitystreams";
   type: "Create";
   actor: string;
+  to: string[];
+  cc: string[];
   object: {
     type: "Note";
     id: string;
@@ -41,6 +44,7 @@ export interface AcceptChallengeActivity {
   "@context": "https://www.w3.org/ns/activitystreams";
   type: "Accept";
   actor: string;
+  to: string[];  // [challenger actor URI]
   object: string; // URI of the challenge Note
 }
 
@@ -48,6 +52,8 @@ export interface UndoChallengeActivity {
   "@context": "https://www.w3.org/ns/activitystreams";
   type: "Undo";
   actor: string;
+  to: string[];
+  cc: string[];
   object: string; // URI of the challenge Note
 }
 
@@ -55,6 +61,8 @@ export interface CreateGameActivity {
   "@context": "https://www.w3.org/ns/activitystreams";
   type: "Create";
   actor: string;
+  to: string[];
+  cc: string[];  // includes both players and host's followers
   object: {
     type: "Note";
     id: string;
@@ -68,6 +76,8 @@ export interface CreateGameResultActivity {
   "@context": "https://www.w3.org/ns/activitystreams";
   type: "Create";
   actor: string;
+  to: string[];
+  cc: string[];  // includes both players and host's followers
   object: {
     type: "Note";
     id: string;

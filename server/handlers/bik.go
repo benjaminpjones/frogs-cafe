@@ -115,7 +115,7 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Assign colors: creator gets black for now (TODO: respect colorPref)
+	// Assign colors: creator gets black for now (TODO: respect colorAssignment)
 	blackActor := fmt.Sprintf("%s/users/%s", h.cfg.BaseURL, creatorUsername)
 	whiteActor := activity.Actor
 
@@ -151,10 +151,9 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 			InReplyTo: challengeURI,
 			Attachment: bik.BikGame{
 				Type:      "BikGame",
-				ID:        gameID,
+				ID:        gameURI,
 				Black:     blackActor,
 				White:     whiteActor,
-				URL:       gameURI,
 				WebSocket: wsURL,
 			},
 		},
@@ -184,7 +183,7 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		BoardSize   int             `json:"boardSize"`
 		TimeControl bik.TimeControl `json:"timeControl"`
-		ColorPref   string          `json:"colorPreference"`
+		ColorAssignment string      `json:"colorAssignment"`
 		ExpiresIn   int             `json:"expiresIn"` // seconds
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -197,8 +196,8 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresIn == 0 {
 		req.ExpiresIn = 3600 // 1 hour default
 	}
-	if req.ColorPref == "" {
-		req.ColorPref = "any"
+	if req.ColorAssignment == "" {
+		req.ColorAssignment = "random"
 	}
 
 	var username string
@@ -213,9 +212,9 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 
 	timeCtrlJSON, _ := json.Marshal(req.TimeControl)
 	_, err := h.db.Exec(`
-		INSERT INTO bik_challenges (creator_id, uri, board_size, time_control, color_pref, expires_at)
+		INSERT INTO bik_challenges (creator_id, uri, board_size, time_control, color_assignment, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
-	`, playerID, challengeURI, req.BoardSize, timeCtrlJSON, req.ColorPref, expiresAt)
+	`, playerID, challengeURI, req.BoardSize, timeCtrlJSON, req.ColorAssignment, expiresAt)
 	if err != nil {
 		http.Error(w, "failed to create challenge", http.StatusInternalServerError)
 		return
@@ -237,7 +236,7 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 				Type:        "BikChallenge",
 				BoardSize:   req.BoardSize,
 				TimeControl: req.TimeControl,
-				ColorPref:   req.ColorPref,
+				ColorAssignment: req.ColorAssignment,
 				ExpiresAt:   expiresAt,
 			},
 		},
@@ -253,7 +252,7 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 // ListBIKChallenges handles GET /api/v1/bik/challenges
 func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
-		SELECT c.uri, p.username, c.board_size, c.time_control, c.color_pref, c.expires_at
+		SELECT c.uri, p.username, c.board_size, c.time_control, c.color_assignment, c.expires_at
 		FROM bik_challenges c
 		JOIN players p ON p.id = c.creator_id
 		WHERE c.status = 'open' AND c.expires_at > NOW()
@@ -270,7 +269,7 @@ func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
 		Creator   string          `json:"creator"`
 		BoardSize int             `json:"boardSize"`
 		TimeCtrl  json.RawMessage `json:"timeControl"`
-		ColorPref string          `json:"colorPreference"`
+		ColorAssignment string    `json:"colorAssignment"`
 		ExpiresAt time.Time       `json:"expiresAt"`
 	}
 
@@ -278,7 +277,7 @@ func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item challengeItem
 		var timeCtrlRaw []byte
-		if err := rows.Scan(&item.URI, &item.Creator, &item.BoardSize, &timeCtrlRaw, &item.ColorPref, &item.ExpiresAt); err != nil {
+		if err := rows.Scan(&item.URI, &item.Creator, &item.BoardSize, &timeCtrlRaw, &item.ColorAssignment, &item.ExpiresAt); err != nil {
 			http.Error(w, "db error", http.StatusInternalServerError)
 			return
 		}

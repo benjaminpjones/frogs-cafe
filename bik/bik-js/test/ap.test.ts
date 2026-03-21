@@ -48,7 +48,7 @@ describe("AP activity builders", () => {
         type: "BikChallenge",
         boardSize: 19,
         timeControl: { system: "byoyomi", mainTime: 600, periods: 5, periodTime: 30 },
-        colorPreference: "any",
+        colorAssignment: "random",
         expiresAt: "2024-03-10T15:30:00Z",
       },
       "Looking for a game! 19x19, 10min + 5x30s byo-yomi",
@@ -92,8 +92,8 @@ describe("challenge/accept flow", () => {
     await using srv = await withInbox(9878, () =>
       buildCreateGame(
         ALICE, GAME_URI, CHALLENGE_URI,
-        { type: "BikGame", id: "xyz789", black: ALICE, white: BOB,
-          url: `${SERVER_A}/games/xyz789`, websocket: `wss://server-a.example/ws/games/xyz789` },
+        { type: "BikGame", id: GAME_URI, black: ALICE, white: BOB,
+          websocket: `wss://server-a.example/ws/games/xyz789` },
         "@alice vs @bob@server-b.example — Game started!",
       ),
     );

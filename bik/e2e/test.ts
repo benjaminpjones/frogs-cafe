@@ -57,7 +57,7 @@ async function createChallenge(server: string, token: string) {
     body: JSON.stringify({
       boardSize: 9,
       timeControl: { system: "absolute", mainTime: 300 },
-      colorPreference: "any",
+      colorAssignment: "random",
       expiresIn: 3600,
     }),
   });

@@ -3,7 +3,9 @@ package bik
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -15,6 +17,12 @@ import (
 type Keys struct {
 	Private ed25519.PrivateKey
 	Public  ed25519.PublicKey
+	Kid     string // derived from public key: hex(sha256(pub)[:8])
+}
+
+func deriveKid(pub ed25519.PublicKey) string {
+	h := sha256.Sum256(pub)
+	return hex.EncodeToString(h[:8])
 }
 
 // GenerateKeys creates a new Ed25519 key pair.
@@ -23,7 +31,7 @@ func GenerateKeys() (*Keys, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Keys{Private: priv, Public: pub}, nil
+	return &Keys{Private: priv, Public: pub, Kid: deriveKid(pub)}, nil
 }
 
 // LoadOrGenerateKeys loads keys from a PEM string, or generates new ones if empty.
@@ -39,7 +47,8 @@ func LoadOrGenerateKeys(pemStr string) (*Keys, error) {
 		return nil, fmt.Errorf("bik: expected %d byte Ed25519 key, got %d", ed25519.PrivateKeySize, len(block.Bytes))
 	}
 	priv := ed25519.PrivateKey(block.Bytes)
-	return &Keys{Private: priv, Public: priv.Public().(ed25519.PublicKey)}, nil
+	pub := priv.Public().(ed25519.PublicKey)
+	return &Keys{Private: priv, Public: pub, Kid: deriveKid(pub)}, nil
 }
 
 // JWKSet returns the public key as a JWK set for the /.well-known/bik/keys endpoint.
@@ -48,6 +57,7 @@ func (k *Keys) JWKSet() JWKSet {
 		Keys: []JWK{{
 			Kty: "OKP",
 			Crv: "Ed25519",
+			Kid: k.Kid,
 			X:   base64.RawURLEncoding.EncodeToString(k.Public),
 		}},
 	}
@@ -56,6 +66,7 @@ func (k *Keys) JWKSet() JWKSet {
 // SignToken creates a signed BIK token for a player joining a game.
 func (k *Keys) SignToken(player, gameURI string, ttl time.Duration) (string, error) {
 	payload := BikToken{
+		Kid:    k.Kid,
 		Player: player,
 		Game:   gameURI,
 		Exp:    time.Now().Add(ttl).Unix(),

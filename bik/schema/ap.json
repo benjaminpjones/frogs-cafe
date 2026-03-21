@@ -3,6 +3,7 @@
   "$id": "https://bik.example/schema/ap.json",
   "title": "BIK ActivityPub Activities",
   "description": "ActivityPub activities used for BIK matchmaking and results",
+  "$comment": "Three variants share type='Create' and are distinguished by object.attachment.type (BikChallenge, BikGame, BikGameResult). Validators should inspect object.attachment.type first to select the correct branch rather than trying all three oneOf branches blindly.",
   "$defs": {
     "TimeControl": {
       "oneOf": [
@@ -41,22 +42,23 @@
         "type":            { "const": "BikChallenge" },
         "boardSize":       { "type": "integer", "minimum": 2 },
         "timeControl":     { "$ref": "#/$defs/TimeControl" },
-        "colorPreference": { "type": "string", "enum": ["black", "white", "any"] },
+        "colorAssignment": { "type": "string", "enum": ["black", "white", "random"] },
+        "komi":            { "type": "number", "description": "Point compensation for white. Default 0." },
         "expiresAt":       { "type": "string", "format": "date-time" }
       },
-      "required": ["type", "boardSize", "timeControl", "colorPreference", "expiresAt"]
+      "required": ["type", "boardSize", "timeControl", "colorAssignment", "expiresAt"]
     },
     "BikGame": {
       "type": "object",
       "properties": {
         "type":      { "const": "BikGame" },
-        "id":        { "type": "string" },
+        "id":        { "type": "string", "format": "uri", "description": "Full game URI — canonical identifier and human-readable page" },
         "black":     { "type": "string", "format": "uri" },
         "white":     { "type": "string", "format": "uri" },
-        "url":       { "type": "string", "format": "uri", "description": "Human-readable game page" },
+        "komi":      { "type": "number", "description": "Point compensation for white. Default 0." },
         "websocket": { "type": "string", "description": "wss:// URL for live play" }
       },
-      "required": ["type", "id", "black", "white", "url", "websocket"]
+      "required": ["type", "id", "black", "white", "websocket"]
     },
     "BikGameResult": {
       "type": "object",

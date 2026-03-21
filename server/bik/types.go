@@ -36,16 +36,15 @@ type BikChallenge struct {
 	Type        string      `json:"type"` // "BikChallenge"
 	BoardSize   int         `json:"boardSize"`
 	TimeControl TimeControl `json:"timeControl"`
-	ColorPref   string      `json:"colorPreference"` // black, white, any
+	ColorAssignment string  `json:"colorAssignment"` // black, white, random
 	ExpiresAt   time.Time   `json:"expiresAt"`
 }
 
 type BikGame struct {
 	Type      string `json:"type"` // "BikGame"
-	ID        string `json:"id"`
+	ID        string `json:"id"`        // full game URI — canonical identifier and human-readable page
 	Black     string `json:"black"`     // actor URI
 	White     string `json:"white"`     // actor URI
-	URL       string `json:"url"`       // human-readable game page
 	WebSocket string `json:"websocket"` // wss:// URL
 }
 
@@ -59,7 +58,8 @@ type BikGameResult struct {
 // Token issued by a guest server to authenticate a remote player to the host WS
 
 type BikToken struct {
-	Player string `json:"player"` // @user@domain
+	Kid    string `json:"kid"`    // key ID used to sign this token
+	Player string `json:"player"` // actor URI of the player
 	Game   string `json:"game"`   // game URI on host
 	Exp    int64  `json:"exp"`    // unix timestamp
 }
@@ -86,5 +86,6 @@ type JWKSet struct {
 type JWK struct {
 	Kty string `json:"kty"` // "OKP"
 	Crv string `json:"crv"` // "Ed25519"
+	Kid string `json:"kid"` // key ID
 	X   string `json:"x"`   // base64url-encoded public key
 }
