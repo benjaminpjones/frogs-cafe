@@ -92,11 +92,14 @@ func (h *Handler) handleResign(c *Client) {
 	var blackPlayerID *int
 	var whitePlayerID *int
 	var blackActorURI, whiteActorURI string
-	h.db.QueryRow(`
+	if err := h.db.QueryRow(`
 		SELECT black_player_id, white_player_id,
 		       COALESCE(black_actor_uri, ''), COALESCE(white_actor_uri, '')
 		FROM games WHERE id = $1
-	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI)
+	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI); err != nil {
+		log.Printf("error fetching game players: %v", err)
+		return
+	}
 
 	// Figure out who resigned and who won
 	var winnerColor string

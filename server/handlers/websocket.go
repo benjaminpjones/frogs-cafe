@@ -208,7 +208,9 @@ func (h *Handler) sendGameState(client *Client, gameIDStr string) {
 
 	// Fetch game phase
 	var status string
-	h.db.QueryRow("SELECT status FROM games WHERE id = $1", gameIDStr).Scan(&status)
+	if err := h.db.QueryRow("SELECT status FROM games WHERE id = $1", gameIDStr).Scan(&status); err != nil {
+		log.Printf("error fetching game status: %v", err)
+	}
 	phase := status // active/finished map directly; waiting → active for simplicity
 
 	nextToPlay := "black"
