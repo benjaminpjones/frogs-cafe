@@ -13,31 +13,134 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (h *Handler) SaveMove(gameIDStr string, playerID int, data map[string]interface{}) error {
+// isGameParticipant returns true if the given player (by local ID or actor URI) is a participant in the game.
+func (h *Handler) isGameParticipant(gameIDStr string, playerID int, actorURI string) (bool, error) {
 	gameID, err := strconv.Atoi(gameIDStr)
 	if err != nil {
-		return err
+		return false, err
+	}
+	var count int
+	if actorURI != "" {
+		// Remote player: check actor URI against federated columns
+		err = h.db.QueryRow(`
+			SELECT COUNT(*) FROM games
+			WHERE id = $1 AND status = 'active'
+			AND (black_actor_uri = $2 OR white_actor_uri = $2)
+		`, gameID, actorURI).Scan(&count)
+	} else {
+		// Local player: check player ID against local columns
+		err = h.db.QueryRow(`
+			SELECT COUNT(*) FROM games
+			WHERE id = $1 AND status = 'active'
+			AND (black_player_id = $2 OR white_player_id = $2)
+		`, gameID, playerID).Scan(&count)
+	}
+	return count > 0, err
+}
+
+// SaveMove saves a move to the database and returns the move number.
+func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data map[string]interface{}) (int, error) {
+	gameID, err := strconv.Atoi(gameIDStr)
+	if err != nil {
+		return 0, err
 	}
 
-	x := int(data["x"].(float64))
-	y := int(data["y"].(float64))
+	// Support BIK coordinate format: pos: [col, row]
+	// Fall back to legacy x/y fields for backwards compatibility
+	var x, y int
+	if pos, ok := data["pos"]; ok {
+		if pos == nil {
+			// pass — store as -1,-1
+			x, y = -1, -1
+		} else if arr, ok := pos.([]interface{}); ok && len(arr) == 2 {
+			x = int(arr[0].(float64))
+			y = int(arr[1].(float64))
+		}
+	} else {
+		x = int(data["x"].(float64))
+		y = int(data["y"].(float64))
+	}
 
-	// Get the current move number
 	var moveNumber int
 	err = h.db.QueryRow(
 		"SELECT COALESCE(MAX(move_number), 0) + 1 FROM moves WHERE game_id = $1",
 		gameID,
 	).Scan(&moveNumber)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	// Insert the move
-	_, err = h.db.Exec(
-		"INSERT INTO moves (game_id, player_id, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
-		gameID, playerID, moveNumber, x, y,
-	)
-	return err
+	if actorURI != "" {
+		// Remote player: store actor_uri, leave player_id null
+		_, err = h.db.Exec(
+			"INSERT INTO moves (game_id, actor_uri, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
+			gameID, actorURI, moveNumber, x, y,
+		)
+	} else {
+		_, err = h.db.Exec(
+			"INSERT INTO moves (game_id, player_id, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
+			gameID, playerID, moveNumber, x, y,
+		)
+	}
+	return moveNumber, err
+}
+
+func (h *Handler) handleResign(c *Client) {
+	gameID := c.gameID
+
+	// Determine winner (the other participant)
+	var blackPlayerID *int
+	var whitePlayerID *int
+	var blackActorURI, whiteActorURI string
+	if err := h.db.QueryRow(`
+		SELECT black_player_id, white_player_id,
+		       COALESCE(black_actor_uri, ''), COALESCE(white_actor_uri, '')
+		FROM games WHERE id = $1
+	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI); err != nil {
+		log.Printf("error fetching game players: %v", err)
+		return
+	}
+
+	// Figure out who resigned and who won
+	var winnerColor string
+	resignerIsBlack := (c.playerID > 0 && blackPlayerID != nil && *blackPlayerID == c.playerID) ||
+		(c.actorURI != "" && blackActorURI == c.actorURI)
+	if resignerIsBlack {
+		winnerColor = "white"
+	} else {
+		winnerColor = "black"
+	}
+
+	result := string(winnerColor[0]-32) + "+R" // "W+R" or "B+R"
+
+	// Mark game finished
+	if _, err := h.db.Exec("UPDATE games SET status = 'finished' WHERE id = $1", gameID); err != nil {
+		log.Printf("handleResign: mark finished: %v", err)
+	}
+
+	// Broadcast game_over
+	gameOver := map[string]interface{}{
+		"type": "game_over",
+		"data": map[string]interface{}{
+			"result":     result,
+			"winner":     winnerColor,
+			"scoreBlack": nil,
+			"scoreWhite": nil,
+		},
+	}
+	if b, err := json.Marshal(gameOver); err == nil {
+		// Send to all clients watching this game
+		hub.mutex.RLock()
+		for client := range hub.clients {
+			if client.gameID == gameID {
+				select {
+				case client.send <- b:
+				default:
+				}
+			}
+		}
+		hub.mutex.RUnlock()
+	}
 }
 
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {

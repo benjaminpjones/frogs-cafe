@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bik.example/schema/common.json",
+  "title": "BIK Common Types",
+  "$defs": {
+    "Position": {
+      "description": "A board position as [col, row] (zero-indexed), or null for pass",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        { "type": "null" }
+      ]
+    },
+    "Color": {
+      "type": "string",
+      "enum": ["black", "white"]
+    },
+    "GamePhase": {
+      "type": "string",
+      "enum": ["active", "scoring", "finished"]
+    },
+    "GameResult": {
+      "description": "SGF-style result string: B+R, W+3.5, B+T, etc.",
+      "type": "string",
+      "pattern": "^(B|W)\\+(R|T|[0-9]+(\\.[0-9]+)?)$"
+    },
+    "ByoyomiPlayerClock": {
+      "type": "object",
+      "properties": {
+        "main":       { "type": "number", "description": "Main time remaining in seconds" },
+        "periods":    { "type": "integer", "minimum": 0 },
+        "periodTime": { "type": "number", "description": "Seconds per period" }
+      },
+      "required": ["main", "periods", "periodTime"]
+    },
+    "Clock": {
+      "oneOf": [
+        {
+          "description": "Byo-yomi clock",
+          "type": "object",
+          "properties": {
+            "system":      { "const": "byoyomi" },
+            "black":       { "$ref": "#/$defs/ByoyomiPlayerClock" },
+            "white":       { "$ref": "#/$defs/ByoyomiPlayerClock" },
+            "activeColor": { "$ref": "#/$defs/Color" }
+          },
+          "required": ["system", "black", "white", "activeColor"]
+        },
+        {
+          "description": "Fischer clock",
+          "type": "object",
+          "properties": {
+            "system":      { "const": "fischer" },
+            "black":       { "type": "number", "description": "Seconds remaining" },
+            "white":       { "type": "number" },
+            "increment":   { "type": "number", "description": "Seconds added per move" },
+            "activeColor": { "$ref": "#/$defs/Color" }
+          },
+          "required": ["system", "black", "white", "increment", "activeColor"]
+        },
+        {
+          "description": "Absolute (no time added)",
+          "type": "object",
+          "properties": {
+            "system":      { "const": "absolute" },
+            "black":       { "type": "number" },
+            "white":       { "type": "number" },
+            "activeColor": { "$ref": "#/$defs/Color" }
+          },
+          "required": ["system", "black", "white", "activeColor"]
+        }
+      ]
+    }
+  }
+}

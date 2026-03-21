@@ -1,14 +1,19 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 
 	"frogs_cafe/auth"
+	"frogs_cafe/bik"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -26,7 +31,8 @@ type Client struct {
 	send     chan []byte
 	gameID   string
 	userID   string
-	playerID int
+	playerID int    // local player ID; -1 for remote (BIK) players
+	actorURI string // set for remote players authenticated via BIK token
 }
 
 type Hub struct {
@@ -110,7 +116,6 @@ func (h *Hub) run() {
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Get token from query parameter or header
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
@@ -119,23 +124,36 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Token is now optional - guests can view without authentication
+	// Game ID from URL path (/ws/games/{gameID}) or query param (legacy)
+	gameID := chi.URLParam(r, "gameID")
+	if gameID == "" {
+		gameID = r.URL.Query().Get("game_id")
+	}
+
 	var playerID int
 	var username string
-	var err error
+	var actorURI string
 
 	if token != "" {
-		// Validate session token
+		// Try local session token first
+		var err error
 		playerID, username, err = auth.ValidateSession(h.db.DB, token)
 		if err != nil {
-			log.Printf("Token validation failed: %v", err)
-			// Continue as guest instead of returning error
-			playerID = 0
-			username = "guest"
+			// Try BIK token (remote player)
+			bikTok, bikErr := h.verifyBIKToken(token, gameID)
+			if bikErr != nil {
+				log.Printf("WS auth failed — session: %v; bik: %v", err, bikErr)
+				// Fall through as guest
+			} else {
+				actorURI = bikTok.Player
+				username = bikTok.Player
+				playerID = -1 // sentinel: remote player
+				log.Printf("Remote player authenticated via BIK token: %s", actorURI)
+			}
 		}
-	} else {
-		// Guest viewer
-		playerID = 0
+	}
+
+	if playerID == 0 && actorURI == "" {
 		username = "guest"
 	}
 
@@ -148,15 +166,119 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	client := &Client{
 		conn:     conn,
 		send:     make(chan []byte, 256),
-		gameID:   r.URL.Query().Get("game_id"),
+		gameID:   gameID,
 		userID:   username,
 		playerID: playerID,
+		actorURI: actorURI,
 	}
 
 	hub.register <- client
 
+	// Send current game state immediately on connect
+	if gameID != "" {
+		go h.sendGameState(client, gameID)
+	}
+
 	go client.writePump()
 	go client.readPump()
+}
+
+func (h *Handler) sendGameState(client *Client, gameIDStr string) {
+	// Fetch moves
+	rows, err := h.db.Query(
+		"SELECT x, y FROM moves WHERE game_id = $1 ORDER BY move_number ASC",
+		gameIDStr,
+	)
+	if err != nil {
+		log.Printf("sendGameState: query moves: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type pos [2]int
+	moves := []interface{}{}
+	for rows.Next() {
+		var x, y int
+		if err := rows.Scan(&x, &y); err != nil {
+			log.Printf("sendGameState: scan move: %v", err)
+			continue
+		}
+		moves = append(moves, pos{x, y})
+	}
+
+	// Fetch game phase
+	var status string
+	if err := h.db.QueryRow("SELECT status FROM games WHERE id = $1", gameIDStr).Scan(&status); err != nil {
+		log.Printf("error fetching game status: %v", err)
+	}
+	phase := status // active/finished map directly; waiting → active for simplicity
+
+	nextToPlay := "black"
+	if len(moves)%2 == 1 {
+		nextToPlay = "white"
+	}
+
+	msg := map[string]interface{}{
+		"type": "game_state",
+		"data": map[string]interface{}{
+			"moves":      moves,
+			"phase":      phase,
+			"nextToPlay": nextToPlay,
+			"clock": map[string]interface{}{
+				"system":      "absolute",
+				"black":       300,
+				"white":       300,
+				"activeColor": nextToPlay,
+			},
+		},
+	}
+	if b, err := json.Marshal(msg); err == nil {
+		client.send <- b
+	}
+}
+
+// verifyBIKToken parses and verifies a BIK token issued by a remote server.
+func (h *Handler) verifyBIKToken(token, gameID string) (*bik.BikToken, error) {
+	// Decode payload without verifying (to extract the player's server domain)
+	dotIdx := strings.LastIndex(token, ".")
+	if dotIdx < 0 {
+		return nil, fmt.Errorf("malformed BIK token")
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(token[:dotIdx])
+	if err != nil {
+		return nil, fmt.Errorf("decode BIK token payload: %w", err)
+	}
+	var t bik.BikToken
+	if err := json.Unmarshal(payloadBytes, &t); err != nil {
+		return nil, fmt.Errorf("unmarshal BIK token: %w", err)
+	}
+
+	// Extract server domain from actor URI (e.g. "https://server-b.example/users/bob" → "server-b.example")
+	playerURL, err := url.Parse(t.Player)
+	if err != nil || playerURL.Host == "" {
+		return nil, fmt.Errorf("invalid player URI in BIK token: %s", t.Player)
+	}
+	domain := playerURL.Host
+
+	// Fetch remote server's public key by kid (re-fetches on unknown kid)
+	pubKey, err := h.keyCache.FetchPublicKey(domain, t.Kid)
+	if err != nil {
+		return nil, fmt.Errorf("fetch public key for %s kid %q: %w", domain, t.Kid, err)
+	}
+
+	// Verify signature and expiry
+	verified, err := bik.VerifyToken(token, pubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Confirm the token is for this game
+	expectedGameURI := fmt.Sprintf("%s/games/%s", h.cfg.BaseURL, gameID)
+	if verified.Game != expectedGameURI {
+		return nil, fmt.Errorf("BIK token game mismatch: got %s, want %s", verified.Game, expectedGameURI)
+	}
+
+	return verified, nil
 }
 
 func (c *Client) readPump() {
@@ -227,34 +349,81 @@ func (c *Client) readPump() {
 
 		// Handle move type messages
 		if msgType, ok := msg["type"].(string); ok && msgType == "move" {
-			// Only authenticated players can make moves
-			if c.playerID == 0 {
+			// Guests cannot make moves
+			if c.playerID == 0 && c.actorURI == "" {
 				log.Printf("Guest attempted to make a move - rejected")
 				continue
 			}
 
+			// Verify the client is actually a participant in this game
+			ok, err := hub.handler.isGameParticipant(c.gameID, c.playerID, c.actorURI)
+			if err != nil || !ok {
+				log.Printf("Move rejected: %s is not a participant in game %s", c.userID, c.gameID)
+				reject := map[string]interface{}{
+					"type": "move_rejected",
+					"data": map[string]string{"reason": "not_your_turn"},
+				}
+				if b, err := json.Marshal(reject); err == nil {
+					c.send <- b
+				}
+				continue
+			}
+
 			if data, ok := msg["data"].(map[string]interface{}); ok {
-				// Use authenticated playerID from JWT, not from message
-				if err := hub.handler.SaveMove(c.gameID, c.playerID, data); err != nil {
+				moveNumber, err := hub.handler.SaveMove(c.gameID, c.playerID, c.actorURI, data)
+				if err != nil {
 					log.Printf("Error saving move: %v", err)
 					continue
 				}
 
-				// Add the authenticated player_id to the data before broadcasting
-				data["player_id"] = float64(c.playerID) // JSON numbers are float64
-				msg["data"] = data
+				// Determine color from move number: odd = black, even = white
+				color := "black"
+				nextToPlay := "white"
+				if moveNumber%2 == 0 {
+					color = "white"
+					nextToPlay = "black"
+				}
 
-				// Re-marshal the updated message
-				updatedMessage, err := json.Marshal(msg)
+				// Build move_played broadcast per BIK spec
+				movePlayed := map[string]interface{}{
+					"type": "move_played",
+					"data": map[string]interface{}{
+						"pos":        data["pos"],
+						"moveNumber": moveNumber,
+						"color":      color,
+						"captures":   []interface{}{},
+						"nextToPlay": nextToPlay,
+						"clock": map[string]interface{}{
+							"system":      "absolute",
+							"black":       300,
+							"white":       300,
+							"activeColor": nextToPlay,
+						},
+					},
+				}
+
+				updatedMessage, err := json.Marshal(movePlayed)
 				if err != nil {
-					log.Printf("Error marshaling updated message: %v", err)
+					log.Printf("Error marshaling move_played: %v", err)
 					continue
 				}
 
-				// Broadcast the updated message to all clients in the same game
 				hub.broadcast <- updatedMessage
 				continue
 			}
+		}
+
+		// Handle resign
+		if msgType, ok := msg["type"].(string); ok && msgType == "resign" {
+			if c.playerID == 0 && c.actorURI == "" {
+				continue // guests can't resign
+			}
+			ok, _ := hub.handler.isGameParticipant(c.gameID, c.playerID, c.actorURI)
+			if !ok {
+				continue
+			}
+			hub.handler.handleResign(c)
+			continue
 		}
 
 		// For other message types, broadcast as-is

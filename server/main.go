@@ -84,10 +84,18 @@ func main() {
 	}))
 
 	// Initialize handlers
-	h := handlers.New(db)
+	h, err := handlers.New(db, cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize handlers: %v", err)
+	}
 
 	// Routes
 	r.Get("/health", h.HealthCheck)
+
+	// Federation endpoints
+	r.Get("/.well-known/webfinger", h.WellKnownWebFinger)
+	r.Get("/.well-known/bik/keys", h.WellKnownBIKKeys)
+	r.Post("/bik/inbox", h.BIKInbox)
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -112,10 +120,19 @@ func main() {
 		r.Get("/players", h.ListPlayers)
 		r.Post("/players", h.CreatePlayer)
 		r.Get("/players/{playerID}", h.GetPlayer)
+
+		// BIK routes
+		r.Get("/bik/challenges", h.ListBIKChallenges)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth(db.DB))
+			r.Post("/bik/challenges", h.CreateBIKChallenge)
+			r.Post("/bik/token/{gameID}", h.GetBIKToken)
+		})
 	})
 
 	// WebSocket route
 	r.Get("/ws", h.HandleWebSocket)
+	r.Get("/ws/games/{gameID}", h.HandleWebSocket)
 
 	// Serve static files from React build (production)
 	staticDir := "./static"
