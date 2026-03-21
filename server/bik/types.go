@@ -33,15 +33,15 @@ type TimeControl struct {
 }
 
 type BikChallenge struct {
-	Type        string      `json:"type"` // "BikChallenge"
-	BoardSize   int         `json:"boardSize"`
-	TimeControl TimeControl `json:"timeControl"`
-	ColorAssignment string  `json:"colorAssignment"` // black, white, random
-	ExpiresAt   time.Time   `json:"expiresAt"`
+	Type            string      `json:"type"` // "BikChallenge"
+	BoardSize       int         `json:"boardSize"`
+	TimeControl     TimeControl `json:"timeControl"`
+	ColorAssignment string      `json:"colorAssignment"` // black, white, random
+	ExpiresAt       time.Time   `json:"expiresAt"`
 }
 
 type BikGame struct {
-	Type      string `json:"type"` // "BikGame"
+	Type      string `json:"type"`      // "BikGame"
 	ID        string `json:"id"`        // full game URI — canonical identifier and human-readable page
 	Black     string `json:"black"`     // actor URI
 	White     string `json:"white"`     // actor URI

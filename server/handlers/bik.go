@@ -181,10 +181,10 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 	playerID, _ := middleware.GetPlayerID(r)
 
 	var req struct {
-		BoardSize   int             `json:"boardSize"`
-		TimeControl bik.TimeControl `json:"timeControl"`
-		ColorAssignment string      `json:"colorAssignment"`
-		ExpiresIn   int             `json:"expiresIn"` // seconds
+		BoardSize       int             `json:"boardSize"`
+		TimeControl     bik.TimeControl `json:"timeControl"`
+		ColorAssignment string          `json:"colorAssignment"`
+		ExpiresIn       int             `json:"expiresIn"` // seconds
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -233,11 +233,11 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 			AttributedTo: actorURI,
 			Content:      content,
 			Attachment: bik.BikChallenge{
-				Type:        "BikChallenge",
-				BoardSize:   req.BoardSize,
-				TimeControl: req.TimeControl,
+				Type:            "BikChallenge",
+				BoardSize:       req.BoardSize,
+				TimeControl:     req.TimeControl,
 				ColorAssignment: req.ColorAssignment,
-				ExpiresAt:   expiresAt,
+				ExpiresAt:       expiresAt,
 			},
 		},
 	}
@@ -265,12 +265,12 @@ func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type challengeItem struct {
-		URI       string          `json:"uri"`
-		Creator   string          `json:"creator"`
-		BoardSize int             `json:"boardSize"`
-		TimeCtrl  json.RawMessage `json:"timeControl"`
-		ColorAssignment string    `json:"colorAssignment"`
-		ExpiresAt time.Time       `json:"expiresAt"`
+		URI             string          `json:"uri"`
+		Creator         string          `json:"creator"`
+		BoardSize       int             `json:"boardSize"`
+		TimeCtrl        json.RawMessage `json:"timeControl"`
+		ColorAssignment string          `json:"colorAssignment"`
+		ExpiresAt       time.Time       `json:"expiresAt"`
 	}
 
 	items := []challengeItem{}
