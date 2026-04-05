@@ -231,6 +231,7 @@ All messages share a common envelope:
 | `mark_dead` | Mark stones as dead during scoring |
 | `score_accept` | Accept the current score |
 | `score_reject` | Reject score (resume play) |
+| `keepalive` | Signal client liveness |
 
 **`move`**
 ```json
@@ -253,6 +254,17 @@ All messages share a common envelope:
 {"type": "score_accept", "data": {}}
 {"type": "score_reject", "data": {}}
 ```
+
+**`keepalive`**
+```json
+{"type": "keepalive", "data": {"ts": 1710000000}}
+```
+
+Clients MUST send `keepalive` messages at a regular interval during active games. The `ts` field is the client's Unix timestamp in seconds (integer). The recommended interval is 3 seconds.
+
+Hosts use keepalives to detect client liveness. If a host receives no messages (moves or keepalives) from a player for an implementation-defined timeout (recommended: 15 seconds), it MAY flag the player as disconnected and start a disconnection clock per its own policy.
+
+Hosts MUST NOT require keepalives — a client that sends only game actions is still considered connected. Keepalives supplement, rather than replace, the WebSocket protocol's built-in ping/pong frames.
 
 #### Host → All Clients
 
