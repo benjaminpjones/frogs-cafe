@@ -17,6 +17,14 @@ e2e:
 	docker compose -f bik/e2e/docker-compose.yml run --rm --build test; \
 	docker compose -f bik/e2e/docker-compose.yml down -v
 
+# Run BIK compliance checker against a running server
+compliance target="http://localhost:8080" token="" username="":
+	cd bik/compliance && \
+	BIK_TARGET={{ target }} \
+	BIK_TOKEN={{ token }} \
+	BIK_USERNAME={{ username }} \
+	npx vitest run
+
 # Run server and client in split tmux session with hot reload
 run:
 	#!/usr/bin/env bash
