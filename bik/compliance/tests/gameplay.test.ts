@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { config, keys } from "../src/setup.js";
 import {
   setupGame,
@@ -7,30 +7,36 @@ import {
 } from "../src/helpers.js";
 import type { PlayerConnection } from "../src/helpers.js";
 
-// The local user creates the challenge, so they are black (creator = black in current impl).
-// The mock remote user (testbot) accepts, so they are white.
+const openConnections: PlayerConnection[] = [];
+
+afterEach(() => {
+  for (const conn of openConnections) {
+    conn.close();
+  }
+  openConnections.length = 0;
+});
 
 async function setupConnectedGame(): Promise<{
   black: PlayerConnection;
   white: PlayerConnection;
-  cleanup: () => void;
 }> {
-  const game = await setupGame(config);
-  const black = await connectLocalPlayer(config, game);
-  const white = await connectRemotePlayer(config, keys, game);
-  return {
-    black,
-    white,
-    cleanup() {
-      black.close();
-      white.close();
-    },
-  };
+  const game = await setupGame(config, { colorAssignment: "black" });
+  const local = await connectLocalPlayer(config, game);
+  const remote = await connectRemotePlayer(config, keys, game);
+  openConnections.push(local, remote);
+
+  // Assign by actual game response, not assumption
+  const localActorURI = `${config.target}/users/${config.username}`;
+  const isLocalBlack = game.black === localActorURI;
+  const black = isLocalBlack ? local : remote;
+  const white = isLocalBlack ? remote : local;
+
+  return { black, white };
 }
 
 describe("GAMEPLAY", () => {
   it("both players receive game_state on connect", async () => {
-    const { black, white, cleanup } = await setupConnectedGame();
+    const { black, white } = await setupConnectedGame();
 
     const blackState = black.messages.find((m) => m.type === "game_state");
     const whiteState = white.messages.find((m) => m.type === "game_state");
@@ -43,12 +49,10 @@ describe("GAMEPLAY", () => {
       expect(blackState!.data.moves).toEqual([]);
       expect(blackState!.data.nextToPlay).toBe("black");
     }
-
-    cleanup();
   });
 
   it("move is broadcast to both players", async () => {
-    const { black, white, cleanup } = await setupConnectedGame();
+    const { black, white } = await setupConnectedGame();
 
     // Black plays
     black.send({ type: "move", data: { pos: [2, 2] } });
@@ -65,12 +69,10 @@ describe("GAMEPLAY", () => {
       expect(blackMsg.data.color).toBe("black");
       expect(blackMsg.data.nextToPlay).toBe("white");
     }
-
-    cleanup();
   });
 
   it("move out of turn is rejected", async () => {
-    const { black, white, cleanup } = await setupConnectedGame();
+    const { white } = await setupConnectedGame();
 
     // White tries to move first (it's black's turn)
     white.send({ type: "move", data: { pos: [3, 3] } });
@@ -80,12 +82,10 @@ describe("GAMEPLAY", () => {
     if (rejection.type === "move_rejected") {
       expect(rejection.data.reason).toBe("not_your_turn");
     }
-
-    cleanup();
   });
 
   it("pass move is accepted", async () => {
-    const { black, white, cleanup } = await setupConnectedGame();
+    const { black } = await setupConnectedGame();
 
     black.send({ type: "move", data: { pos: null } });
 
@@ -95,12 +95,10 @@ describe("GAMEPLAY", () => {
       expect(msg.data.pos).toBeNull();
       expect(msg.data.color).toBe("black");
     }
-
-    cleanup();
   });
 
   it("resign ends game for both players", async () => {
-    const { black, white, cleanup } = await setupConnectedGame();
+    const { black, white } = await setupConnectedGame();
 
     // Play one move then white resigns
     black.send({ type: "move", data: { pos: [2, 2] } });
@@ -118,14 +116,18 @@ describe("GAMEPLAY", () => {
       expect(blackEnd.data.winner).toBe("black");
       expect(blackEnd.data.result).toMatch(/^B\+R$/);
     }
-
-    cleanup();
   });
 
   it("game_state on reconnect includes move history", async () => {
-    const game = await setupGame(config);
-    const black = await connectLocalPlayer(config, game);
-    const white = await connectRemotePlayer(config, keys, game);
+    const game = await setupGame(config, { colorAssignment: "black" });
+    const local = await connectLocalPlayer(config, game);
+    const remote = await connectRemotePlayer(config, keys, game);
+    openConnections.push(local, remote);
+
+    const localActorURI = `${config.target}/users/${config.username}`;
+    const isLocalBlack = game.black === localActorURI;
+    const black = isLocalBlack ? local : remote;
+    const white = isLocalBlack ? remote : local;
 
     // Play two moves
     black.send({ type: "move", data: { pos: [2, 2] } });
@@ -133,17 +135,32 @@ describe("GAMEPLAY", () => {
     white.send({ type: "move", data: { pos: [6, 6] } });
     await black.waitFor("move_played");
 
-    // Disconnect and reconnect white
-    white.close();
-    const white2 = await connectRemotePlayer(config, keys, game);
+    // Disconnect and reconnect remote player
+    remote.close();
+    const remote2 = await connectRemotePlayer(config, keys, game);
+    openConnections.push(remote2);
 
-    const state = white2.messages.find((m) => m.type === "game_state");
+    const state = remote2.messages.find((m) => m.type === "game_state");
     expect(state).toBeDefined();
     if (state!.type === "game_state") {
       expect(state!.data.moves.length).toBe(2);
     }
+  });
 
-    black.close();
-    white2.close();
+  it("random color assignment produces both colors over multiple games", async () => {
+    const colors = new Set<string>();
+
+    for (let i = 0; i < 10; i++) {
+      const game = await setupGame(config, { colorAssignment: "random" });
+      const localActorURI = `${config.target}/users/${config.username}`;
+      if (game.black === localActorURI) {
+        colors.add("black");
+      } else {
+        colors.add("white");
+      }
+      if (colors.size === 2) break;
+    }
+
+    expect(colors.size).toBe(2);
   });
 });

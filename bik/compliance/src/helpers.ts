@@ -87,7 +87,7 @@ export async function acceptChallenge(
 /** Create a challenge and accept it in one step. */
 export async function setupGame(
   config: Config,
-  opts?: { boardSize?: number },
+  opts?: { boardSize?: number; colorAssignment?: string },
 ): Promise<GameSetup> {
   const challengeURI = await createChallenge(config, opts);
   return acceptChallenge(config, challengeURI);
@@ -106,6 +106,8 @@ export function connectPlayer(
       reject: (err: Error) => void;
     }> = [];
 
+    let consumed = 0; // tracks how many messages have been "seen" by waitFor
+
     const client = new BikClient(wsURL, token, {
       onReady() {
         resolve(conn);
@@ -117,6 +119,7 @@ export function connectPlayer(
           if (waiters[i].type === msg.type) {
             const w = waiters.splice(i, 1)[0];
             w.resolve(msg);
+            return; // one message satisfies one waiter
           }
         }
       },
@@ -138,32 +141,36 @@ export function connectPlayer(
         client.send(msg);
       },
       waitFor(type: string, timeoutMs = 5000): Promise<ServerMessage> {
-        // Check messages already received (scan from end for most recent)
-        for (let i = messages.length - 1; i >= 0; i--) {
+        // Check unconsumed messages
+        for (let i = consumed; i < messages.length; i++) {
           if (messages[i].type === type) {
+            consumed = i + 1;
             return Promise.resolve(messages[i]);
           }
         }
+        consumed = messages.length;
 
         // Wait for a future message
         return new Promise((res, rej) => {
+          const waiter = {
+            type,
+            resolve(msg: ServerMessage) {
+              clearTimeout(timer);
+              res(msg);
+            },
+            reject(err: Error) {
+              clearTimeout(timer);
+              rej(err);
+            },
+          };
+
           const timer = setTimeout(() => {
-            const idx = waiters.findIndex((w) => w.resolve === res);
+            const idx = waiters.indexOf(waiter);
             if (idx >= 0) waiters.splice(idx, 1);
             rej(new Error(`Timed out waiting for message type: ${type}`));
           }, timeoutMs);
 
-          waiters.push({
-            type,
-            resolve(msg) {
-              clearTimeout(timer);
-              res(msg);
-            },
-            reject(err) {
-              clearTimeout(timer);
-              rej(err);
-            },
-          });
+          waiters.push(waiter);
         });
       },
       close() {

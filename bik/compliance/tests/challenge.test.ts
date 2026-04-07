@@ -44,8 +44,10 @@ describe("CHALLENGE FLOW", () => {
     expect(game.wsURL).toBeDefined();
     expect(game.black).toBeDefined();
     expect(game.white).toBeDefined();
-    // One player should be the local user, the other the mock user
-    expect(game.white).toContain("testbot");
+    // Both players should be represented
+    const players = [game.black, game.white];
+    expect(players.some((p) => p.includes("testbot"))).toBe(true);
+    expect(players.some((p) => p.includes(config.username))).toBe(true);
   });
 
   it("rejects accept for expired challenge", async () => {
