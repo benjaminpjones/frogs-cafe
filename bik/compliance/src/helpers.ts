@@ -110,6 +110,7 @@ export function connectPlayer(
 
     const waiterConsumed = new Set<number>(); // indices of messages consumed by waiters
 
+
     const client = new BikClient(wsURL, token, {
       onReady() {
         resolve(conn);
