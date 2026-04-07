@@ -59,8 +59,8 @@ type BikGameResult struct {
 
 type Actor struct {
 	Context           string `json:"@context"`
-	Type              string `json:"type"`              // "Person"
-	ID                string `json:"id"`                // actor URI
+	Type              string `json:"type"` // "Person"
+	ID                string `json:"id"`   // actor URI
 	PreferredUsername string `json:"preferredUsername"`
 	Inbox             string `json:"inbox"`
 	Followers         string `json:"followers"`
