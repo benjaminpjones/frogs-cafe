@@ -143,13 +143,13 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			bikTok, bikErr := h.verifyBIKToken(token, gameID)
 			if bikErr != nil {
 				log.Printf("WS auth failed — session: %v; bik: %v", err, bikErr)
-				// Fall through as guest
-			} else {
-				actorURI = bikTok.Player
-				username = bikTok.Player
-				playerID = -1 // sentinel: remote player
-				log.Printf("Remote player authenticated via BIK token: %s", actorURI)
+				http.Error(w, "authentication failed", http.StatusUnauthorized)
+				return
 			}
+			actorURI = bikTok.Player
+			username = bikTok.Player
+			playerID = -1 // sentinel: remote player
+			log.Printf("Remote player authenticated via BIK token: %s", actorURI)
 		}
 	}
 
@@ -203,7 +203,11 @@ func (h *Handler) sendGameState(client *Client, gameIDStr string) {
 			log.Printf("sendGameState: scan move: %v", err)
 			continue
 		}
-		moves = append(moves, pos{x, y})
+		if x == -1 && y == -1 {
+			moves = append(moves, nil) // pass
+		} else {
+			moves = append(moves, pos{x, y})
+		}
 	}
 
 	// Fetch game phase
@@ -355,10 +359,10 @@ func (c *Client) readPump() {
 				continue
 			}
 
-			// Verify the client is actually a participant in this game
-			ok, err := hub.handler.isGameParticipant(c.gameID, c.playerID, c.actorURI)
-			if err != nil || !ok {
-				log.Printf("Move rejected: %s is not a participant in game %s", c.userID, c.gameID)
+			// Verify the client is actually a participant and it's their turn
+			canMove, err := hub.handler.canPlayerMove(c.gameID, c.playerID, c.actorURI)
+			if err != nil || !canMove {
+				log.Printf("Move rejected for %s in game %s: canMove=%v err=%v", c.userID, c.gameID, canMove, err)
 				reject := map[string]interface{}{
 					"type": "move_rejected",
 					"data": map[string]string{"reason": "not_your_turn"},

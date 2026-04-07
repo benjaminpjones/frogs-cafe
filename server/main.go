@@ -96,6 +96,7 @@ func main() {
 	r.Get("/.well-known/webfinger", h.WellKnownWebFinger)
 	r.Get("/.well-known/bik/keys", h.WellKnownBIKKeys)
 	r.Post("/bik/inbox", h.BIKInbox)
+	r.Get("/users/{username}", h.ActorDocument)
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {

@@ -38,6 +38,51 @@ func (h *Handler) isGameParticipant(gameIDStr string, playerID int, actorURI str
 	return count > 0, err
 }
 
+// canPlayerMove checks if the given player is a game participant AND it's their turn.
+func (h *Handler) canPlayerMove(gameIDStr string, playerID int, actorURI string) (bool, error) {
+	gameID, err := strconv.Atoi(gameIDStr)
+	if err != nil {
+		return false, err
+	}
+
+	// Get game info and current move count
+	var blackPlayerID, whitePlayerID *int
+	var blackActorURI, whiteActorURI string
+	var moveCount int
+	var status string
+	err = h.db.QueryRow(`
+		SELECT g.black_player_id, g.white_player_id,
+		       COALESCE(g.black_actor_uri, ''), COALESCE(g.white_actor_uri, ''),
+		       g.status,
+		       (SELECT COUNT(*) FROM moves WHERE game_id = g.id)
+		FROM games g WHERE g.id = $1
+	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI, &status, &moveCount)
+	if err != nil {
+		return false, err
+	}
+
+	if status != "active" {
+		return false, nil
+	}
+
+	// Determine whose turn it is: even move count = black, odd = white
+	isBlackTurn := moveCount%2 == 0
+
+	// Check if this player is the one whose turn it is
+	if actorURI != "" {
+		// Remote player
+		if isBlackTurn {
+			return blackActorURI == actorURI, nil
+		}
+		return whiteActorURI == actorURI, nil
+	}
+	// Local player
+	if isBlackTurn {
+		return blackPlayerID != nil && *blackPlayerID == playerID, nil
+	}
+	return whitePlayerID != nil && *whitePlayerID == playerID, nil
+}
+
 // SaveMove saves a move to the database and returns the move number.
 func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data map[string]interface{}) (int, error) {
 	gameID, err := strconv.Atoi(gameIDStr)
