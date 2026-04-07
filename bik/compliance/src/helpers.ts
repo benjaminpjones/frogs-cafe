@@ -108,16 +108,20 @@ export function connectPlayer(
 
     let consumed = 0; // tracks how many messages have been "seen" by waitFor
 
+    const waiterConsumed = new Set<number>(); // indices of messages consumed by waiters
+
     const client = new BikClient(wsURL, token, {
       onReady() {
         resolve(conn);
       },
       onMessage(msg) {
+        const idx = messages.length;
         messages.push(msg);
         // Check if any waiter matches
         for (let i = waiters.length - 1; i >= 0; i--) {
           if (waiters[i].type === msg.type) {
             const w = waiters.splice(i, 1)[0];
+            waiterConsumed.add(idx);
             w.resolve(msg);
             return; // one message satisfies one waiter
           }
@@ -141,9 +145,9 @@ export function connectPlayer(
         client.send(msg);
       },
       waitFor(type: string, timeoutMs = 5000): Promise<ServerMessage> {
-        // Check unconsumed messages
+        // Check unconsumed messages (skip ones already consumed by live waiters)
         for (let i = consumed; i < messages.length; i++) {
-          if (messages[i].type === type) {
+          if (!waiterConsumed.has(i) && messages[i].type === type) {
             consumed = i + 1;
             return Promise.resolve(messages[i]);
           }

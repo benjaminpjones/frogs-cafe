@@ -75,7 +75,9 @@ func main() {
 
 	// CORS configuration for development
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			return strings.HasPrefix(origin, "http://localhost:")
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -127,6 +129,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAuth(db.DB))
 			r.Post("/bik/challenges", h.CreateBIKChallenge)
+			r.Post("/bik/challenges/accept", h.AcceptRemoteChallenge)
 			r.Post("/bik/token/{gameID}", h.GetBIKToken)
 		})
 	})

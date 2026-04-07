@@ -40,6 +40,22 @@
   color: white;
 }
 
+.remote-indicator {
+  padding: 0.3rem 0.7rem;
+  background: #e3f2fd;
+  color: #1565c0;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.turn-indicator {
+  text-align: center;
+  font-weight: 600;
+  color: #2d5016;
+  margin-bottom: 0.5rem;
+}
+
 .board-container {
   display: flex;
   justify-content: center;

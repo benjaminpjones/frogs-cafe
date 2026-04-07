@@ -17,6 +17,8 @@ export interface Game {
   creator_id: number | null;
   created_at: string;
   updated_at: string;
+  remote_game_uri?: string;
+  remote_ws_url?: string;
 }
 
 export interface Move {
@@ -64,4 +66,20 @@ export interface RegisterRequest {
 export interface LoginRequest {
   username: string;
   password: string;
+}
+
+export interface BIKChallenge {
+  uri: string;
+  creator: string;
+  boardSize: number;
+  timeControl: {
+    system: string;
+    mainTime?: number;
+    periods?: number;
+    periodTime?: number;
+  };
+  colorAssignment: string;
+  expiresAt: string;
+  remote?: boolean;
+  inboxUrl?: string;
 }

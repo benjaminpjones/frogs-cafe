@@ -24,6 +24,8 @@ type Game struct {
 	CreatorID     *int      `json:"creator_id"` // Who created the game (for join validation)
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	RemoteGameURI *string   `json:"remote_game_uri,omitempty"`
+	RemoteWsURL   *string   `json:"remote_ws_url,omitempty"`
 }
 
 type Move struct {

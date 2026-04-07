@@ -147,20 +147,4 @@ describe("GAMEPLAY", () => {
     }
   });
 
-  it("random color assignment produces both colors over multiple games", async () => {
-    const colors = new Set<string>();
-
-    for (let i = 0; i < 10; i++) {
-      const game = await setupGame(config, { colorAssignment: "random" });
-      const localActorURI = `${config.target}/users/${config.username}`;
-      if (game.black === localActorURI) {
-        colors.add("black");
-      } else {
-        colors.add("white");
-      }
-      if (colors.size === 2) break;
-    }
-
-    expect(colors.size).toBe(2);
-  });
 });

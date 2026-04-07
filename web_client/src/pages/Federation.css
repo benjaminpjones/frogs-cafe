@@ -1,0 +1,219 @@
+@import "../styles/common.css";
+
+.federation-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.federation-page h2 {
+  color: #2d5016;
+  margin: 2rem 0 1rem 0;
+  font-size: 1.5rem;
+}
+
+/* Create Challenge Form */
+.create-challenge-form {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.create-challenge-form h3 {
+  margin: 0 0 1.25rem 0;
+  color: #2d5016;
+}
+
+.form-row {
+  margin-bottom: 1rem;
+}
+
+.form-row label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.board-size-options,
+.color-options,
+.time-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.size-btn,
+.color-btn,
+.time-btn {
+  padding: 0.5rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.15s;
+}
+
+.size-btn:hover,
+.color-btn:hover,
+.time-btn:hover {
+  border-color: #4a7c2c;
+}
+
+.size-btn.active,
+.color-btn.active,
+.time-btn.active {
+  border-color: #4a7c2c;
+  background: #4a7c2c;
+  color: white;
+}
+
+.form-select {
+  padding: 0.5rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: white;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* Challenge List */
+.challenge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.challenge-card {
+  background: white;
+  border: 2px solid #ecf0f1;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s;
+}
+
+.challenge-card:hover {
+  border-color: #4a7c2c;
+}
+
+.challenge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.challenge-creator {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.challenge-expiry {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.challenge-details {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.challenge-tag {
+  padding: 0.2rem 0.6rem;
+  background: #f0f5ed;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #2d5016;
+  font-weight: 500;
+}
+
+.challenge-header-right {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.challenge-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.remote-badge {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.challenge-card.remote {
+  border-left: 3px solid #1565c0;
+}
+
+.accept-btn {
+  margin-top: 0.75rem;
+  width: 100%;
+  padding: 0.6rem;
+  background: #1565c0;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.accept-btn:hover {
+  background: #0d47a1;
+}
+
+.accept-btn:disabled {
+  background: #90caf9;
+  cursor: not-allowed;
+}
+
+.active-games-section {
+  margin-bottom: 2rem;
+}
+
+.challenge-card.active-game {
+  border-left: 3px solid #27ae60;
+}
+
+.challenge-card.active-game:hover {
+  border-color: #27ae60;
+  background: #f8faf8;
+}
+
+.active-badge {
+  background: #d4edda;
+  color: #155724;
+}
+
+@media (max-width: 768px) {
+  .board-size-options,
+  .color-options,
+  .time-options {
+    flex-wrap: wrap;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .create-game-btn,
+  .form-actions .refresh-btn {
+    width: 100%;
+  }
+}

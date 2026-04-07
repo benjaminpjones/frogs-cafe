@@ -1,0 +1,2 @@
+ALTER TABLE bik_challenges ALTER COLUMN expires_at TYPE TIMESTAMPTZ;
+ALTER TABLE bik_challenges ALTER COLUMN created_at TYPE TIMESTAMPTZ;

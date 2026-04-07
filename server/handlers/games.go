@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -38,60 +39,15 @@ func (h *Handler) isGameParticipant(gameIDStr string, playerID int, actorURI str
 	return count > 0, err
 }
 
-// canPlayerMove checks if the given player is a game participant AND it's their turn.
-func (h *Handler) canPlayerMove(gameIDStr string, playerID int, actorURI string) (bool, error) {
-	gameID, err := strconv.Atoi(gameIDStr)
-	if err != nil {
-		return false, err
-	}
-
-	// Get game info and current move count
-	var blackPlayerID, whitePlayerID *int
-	var blackActorURI, whiteActorURI string
-	var moveCount int
-	var status string
-	err = h.db.QueryRow(`
-		SELECT g.black_player_id, g.white_player_id,
-		       COALESCE(g.black_actor_uri, ''), COALESCE(g.white_actor_uri, ''),
-		       g.status,
-		       (SELECT COUNT(*) FROM moves WHERE game_id = g.id)
-		FROM games g WHERE g.id = $1
-	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI, &status, &moveCount)
-	if err != nil {
-		return false, err
-	}
-
-	if status != "active" {
-		return false, nil
-	}
-
-	// Determine whose turn it is: even move count = black, odd = white
-	isBlackTurn := moveCount%2 == 0
-
-	// Check if this player is the one whose turn it is
-	if actorURI != "" {
-		// Remote player
-		if isBlackTurn {
-			return blackActorURI == actorURI, nil
-		}
-		return whiteActorURI == actorURI, nil
-	}
-	// Local player
-	if isBlackTurn {
-		return blackPlayerID != nil && *blackPlayerID == playerID, nil
-	}
-	return whitePlayerID != nil && *whitePlayerID == playerID, nil
-}
-
-// SaveMove saves a move to the database and returns the move number.
-func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data map[string]interface{}) (int, error) {
+// ValidateAndSaveMove atomically checks that it's the player's turn and saves the move.
+// Returns the move number or an error. Returns ErrNotYourTurn if the player cannot move.
+func (h *Handler) ValidateAndSaveMove(gameIDStr string, playerID int, actorURI string, data map[string]interface{}) (int, error) {
 	gameID, err := strconv.Atoi(gameIDStr)
 	if err != nil {
 		return 0, err
 	}
 
-	// Support BIK coordinate format: pos: [col, row]
-	// Fall back to legacy x/y fields for backwards compatibility
+	// Parse coordinates from request data
 	var x, y int
 	if pos, ok := data["pos"]; ok {
 		if pos == nil {
@@ -106,43 +62,93 @@ func (h *Handler) SaveMove(gameIDStr string, playerID int, actorURI string, data
 		y = int(data["y"].(float64))
 	}
 
-	var moveNumber int
-	err = h.db.QueryRow(
-		"SELECT COALESCE(MAX(move_number), 0) + 1 FROM moves WHERE game_id = $1",
-		gameID,
-	).Scan(&moveNumber)
+	tx, err := h.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// Lock the game row and get game info + move count in one query
+	var blackPlayerID, whitePlayerID *int
+	var blackActorURI, whiteActorURI string
+	var moveCount int
+	var status string
+	err = tx.QueryRow(`
+		SELECT g.black_player_id, g.white_player_id,
+		       COALESCE(g.black_actor_uri, ''), COALESCE(g.white_actor_uri, ''),
+		       g.status,
+		       (SELECT COUNT(*) FROM moves WHERE game_id = g.id)
+		FROM games g WHERE g.id = $1
+		FOR UPDATE
+	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI, &status, &moveCount)
 	if err != nil {
 		return 0, err
 	}
 
+	if status != "active" {
+		return 0, ErrNotYourTurn
+	}
+
+	// Determine whose turn it is: even move count = black, odd = white
+	isBlackTurn := moveCount%2 == 0
+	canMove := false
 	if actorURI != "" {
-		// Remote player: store actor_uri, leave player_id null
-		_, err = h.db.Exec(
+		if isBlackTurn {
+			canMove = blackActorURI == actorURI
+		} else {
+			canMove = whiteActorURI == actorURI
+		}
+	} else {
+		if isBlackTurn {
+			canMove = blackPlayerID != nil && *blackPlayerID == playerID
+		} else {
+			canMove = whitePlayerID != nil && *whitePlayerID == playerID
+		}
+	}
+	if !canMove {
+		return 0, ErrNotYourTurn
+	}
+
+	moveNumber := moveCount + 1
+
+	if actorURI != "" {
+		_, err = tx.Exec(
 			"INSERT INTO moves (game_id, actor_uri, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
 			gameID, actorURI, moveNumber, x, y,
 		)
 	} else {
-		_, err = h.db.Exec(
+		_, err = tx.Exec(
 			"INSERT INTO moves (game_id, player_id, move_number, x, y) VALUES ($1, $2, $3, $4, $5)",
 			gameID, playerID, moveNumber, x, y,
 		)
 	}
-	return moveNumber, err
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return moveNumber, nil
 }
+
+var ErrNotYourTurn = fmt.Errorf("not your turn")
 
 func (h *Handler) handleResign(c *Client) {
 	gameID := c.gameID
 
-	// Determine winner (the other participant)
+	// Atomically mark game finished and get player info — prevents double-resign race
 	var blackPlayerID *int
 	var whitePlayerID *int
 	var blackActorURI, whiteActorURI string
-	if err := h.db.QueryRow(`
-		SELECT black_player_id, white_player_id,
-		       COALESCE(black_actor_uri, ''), COALESCE(white_actor_uri, '')
-		FROM games WHERE id = $1
-	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI); err != nil {
-		log.Printf("error fetching game players: %v", err)
+	err := h.db.QueryRow(`
+		UPDATE games SET status = 'finished'
+		WHERE id = $1 AND status = 'active'
+		RETURNING black_player_id, white_player_id,
+		          COALESCE(black_actor_uri, ''), COALESCE(white_actor_uri, '')
+	`, gameID).Scan(&blackPlayerID, &whitePlayerID, &blackActorURI, &whiteActorURI)
+	if err != nil {
+		log.Printf("handleResign: game %s already finished or not found: %v", gameID, err)
 		return
 	}
 
@@ -157,11 +163,6 @@ func (h *Handler) handleResign(c *Client) {
 	}
 
 	result := string(winnerColor[0]-32) + "+R" // "W+R" or "B+R"
-
-	// Mark game finished
-	if _, err := h.db.Exec("UPDATE games SET status = 'finished' WHERE id = $1", gameID); err != nil {
-		log.Printf("handleResign: mark finished: %v", err)
-	}
 
 	// Broadcast game_over
 	gameOver := map[string]interface{}{
@@ -403,9 +404,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 
 	var game models.Game
 	err = h.db.QueryRow(
-		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
+		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at, remote_game_uri, remote_ws_url FROM games WHERE id = $1",
 		id,
-	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt, &game.RemoteGameURI, &game.RemoteWsURL)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Game not found", http.StatusNotFound)
