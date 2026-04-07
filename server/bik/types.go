@@ -55,6 +55,17 @@ type BikGameResult struct {
 	SGF    string `json:"sgf,omitempty"`
 }
 
+// AP Actor (Person) document
+
+type Actor struct {
+	Context           string `json:"@context"`
+	Type              string `json:"type"`              // "Person"
+	ID                string `json:"id"`                // actor URI
+	PreferredUsername string `json:"preferredUsername"`
+	Inbox             string `json:"inbox"`
+	Followers         string `json:"followers"`
+}
+
 // Token issued by a guest server to authenticate a remote player to the host WS
 
 type BikToken struct {

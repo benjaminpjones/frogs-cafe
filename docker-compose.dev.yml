@@ -27,6 +27,7 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/frogs_cafe?sslmode=disable
       PORT: 8080
+      BASE_URL: http://localhost:8080
       ENVIRONMENT: development
     depends_on:
       postgres:

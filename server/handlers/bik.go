@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -51,6 +52,33 @@ func (h *Handler) WellKnownWebFinger(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ActorDocument handles GET /users/{username} — returns an AP Person object
+func (h *Handler) ActorDocument(w http.ResponseWriter, r *http.Request) {
+	username := chi.URLParam(r, "username")
+
+	var id int
+	err := h.db.QueryRow("SELECT id FROM players WHERE username = $1", username).Scan(&id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	actorURI := fmt.Sprintf("%s/users/%s", h.cfg.BaseURL, username)
+	actor := bik.Actor{
+		Context:           bik.APContext,
+		Type:              "Person",
+		ID:                actorURI,
+		PreferredUsername: username,
+		Inbox:             fmt.Sprintf("%s/bik/inbox", h.cfg.BaseURL),
+		Followers:         fmt.Sprintf("%s/users/%s/followers", h.cfg.BaseURL, username),
+	}
+
+	w.Header().Set("Content-Type", "application/activity+json")
+	if err := json.NewEncoder(w).Encode(actor); err != nil {
+		log.Printf("ActorDocument: encode: %v", err)
+	}
+}
+
 // WellKnownBIKKeys handles GET /.well-known/bik/keys
 func (h *Handler) WellKnownBIKKeys(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -84,17 +112,18 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 
 	// Load the challenge
 	var (
-		challengeID int
-		creatorID   int
-		boardSize   int
-		timeCtrlRaw []byte
-		status      string
-		expiresAt   time.Time
+		challengeID     int
+		creatorID       int
+		boardSize       int
+		timeCtrlRaw     []byte
+		colorAssignment string
+		status          string
+		expiresAt       time.Time
 	)
 	err := h.db.QueryRow(`
-		SELECT id, creator_id, board_size, time_control, status, expires_at
+		SELECT id, creator_id, board_size, time_control, color_assignment, status, expires_at
 		FROM bik_challenges WHERE uri = $1
-	`, challengeURI).Scan(&challengeID, &creatorID, &boardSize, &timeCtrlRaw, &status, &expiresAt)
+	`, challengeURI).Scan(&challengeID, &creatorID, &boardSize, &timeCtrlRaw, &colorAssignment, &status, &expiresAt)
 	if err != nil {
 		http.Error(w, "challenge not found", http.StatusNotFound)
 		return
@@ -115,17 +144,44 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Assign colors: creator gets black for now (TODO: respect colorAssignment)
-	blackActor := fmt.Sprintf("%s/users/%s", h.cfg.BaseURL, creatorUsername)
-	whiteActor := activity.Actor
+	// Assign colors based on the challenge's colorAssignment field
+	creatorActor := fmt.Sprintf("%s/users/%s", h.cfg.BaseURL, creatorUsername)
+	acceptorActor := activity.Actor
+	var blackActor, whiteActor string
+	switch colorAssignment {
+	case "white":
+		// Creator requested white
+		blackActor = acceptorActor
+		whiteActor = creatorActor
+	case "random":
+		if rand.Intn(2) == 0 {
+			blackActor = creatorActor
+			whiteActor = acceptorActor
+		} else {
+			blackActor = acceptorActor
+			whiteActor = creatorActor
+		}
+	default: // "black" or unset
+		blackActor = creatorActor
+		whiteActor = acceptorActor
+	}
 
-	// Create the game
+	// Create the game — set local player_id on the correct color column
 	var dbGameID int
-	err = h.db.QueryRow(`
-		INSERT INTO games (black_player_id, board_size, status, creator_id, black_actor_uri, white_actor_uri, bik_challenge_uri)
-		VALUES ($1, $2, 'active', $1, $3, $4, $5)
-		RETURNING id
-	`, creatorID, boardSize, blackActor, whiteActor, challengeURI).Scan(&dbGameID)
+	creatorIsBlack := blackActor == creatorActor
+	if creatorIsBlack {
+		err = h.db.QueryRow(`
+			INSERT INTO games (black_player_id, board_size, status, creator_id, black_actor_uri, white_actor_uri, bik_challenge_uri)
+			VALUES ($1, $2, 'active', $1, $3, $4, $5)
+			RETURNING id
+		`, creatorID, boardSize, blackActor, whiteActor, challengeURI).Scan(&dbGameID)
+	} else {
+		err = h.db.QueryRow(`
+			INSERT INTO games (white_player_id, board_size, status, creator_id, black_actor_uri, white_actor_uri, bik_challenge_uri)
+			VALUES ($1, $2, 'active', $1, $3, $4, $5)
+			RETURNING id
+		`, creatorID, boardSize, blackActor, whiteActor, challengeURI).Scan(&dbGameID)
+	}
 	if err != nil {
 		http.Error(w, "failed to create game", http.StatusInternalServerError)
 		return
