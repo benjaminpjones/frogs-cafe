@@ -22,3 +22,6 @@ server/tmp/
 # Go binaries
 server/frogs_cafe
 server/main
+
+# Node
+node_modules/
