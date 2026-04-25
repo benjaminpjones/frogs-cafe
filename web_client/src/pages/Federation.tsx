@@ -108,7 +108,6 @@ export function Federation() {
         },
         body: JSON.stringify({
           challengeUri: challenge.uri,
-          inboxUrl: challenge.inboxUrl,
         }),
       });
 

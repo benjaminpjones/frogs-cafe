@@ -114,16 +114,19 @@ func (h *Handler) BIKInbox(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid actor URI", http.StatusBadRequest)
 			return
 		}
-		actorOrigin := fmt.Sprintf("%s://%s", actorURL.Scheme, actorURL.Host)
 		isPeer := false
 		for _, peer := range h.cfg.BIKPeers {
-			if strings.HasPrefix(peer, actorOrigin) {
+			peerURL, err := url.Parse(peer)
+			if err != nil {
+				continue
+			}
+			if peerURL.Scheme == actorURL.Scheme && peerURL.Host == actorURL.Host {
 				isPeer = true
 				break
 			}
 		}
 		if !isPeer {
-			log.Printf("BIKInbox: rejected activity from unknown peer %s", actorOrigin)
+			log.Printf("BIKInbox: rejected activity from unknown peer %s://%s", actorURL.Scheme, actorURL.Host)
 			http.Error(w, "actor not from a known peer", http.StatusForbidden)
 			return
 		}
@@ -301,7 +304,12 @@ func (h *Handler) handleRemoteCreate(w http.ResponseWriter, r *http.Request, act
 	inboxURL := h.discoverInbox(activity.Actor)
 	if inboxURL == "" {
 		// Fall back: assume standard path
-		inboxURL = activity.Actor[:strings.LastIndex(activity.Actor, "/users/")] + "/bik/inbox"
+		idx := strings.LastIndex(activity.Actor, "/users/")
+		if idx < 0 {
+			http.Error(w, "could not determine inbox URL for actor", http.StatusBadRequest)
+			return
+		}
+		inboxURL = activity.Actor[:idx] + "/bik/inbox"
 	}
 
 	_, err = h.db.Exec(`
@@ -560,10 +568,21 @@ func (h *Handler) AcceptRemoteChallenge(w http.ResponseWriter, r *http.Request) 
 
 	var req struct {
 		ChallengeURI string `json:"challengeUri"`
-		InboxURL     string `json:"inboxUrl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Look up the trusted inbox URL and board size from the stored remote challenge.
+	// Never trust a client-supplied inbox URL — that's an SSRF vector.
+	var inboxURL string
+	var boardSize int
+	if err := h.db.QueryRow(
+		"SELECT inbox_url, board_size FROM remote_challenges WHERE uri = $1",
+		req.ChallengeURI,
+	).Scan(&inboxURL, &boardSize); err != nil {
+		http.Error(w, "challenge not found", http.StatusNotFound)
 		return
 	}
 
@@ -588,9 +607,9 @@ func (h *Handler) AcceptRemoteChallenge(w http.ResponseWriter, r *http.Request) 
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Post(req.InboxURL, "application/activity+json", bytes.NewReader(body))
+	resp, err := client.Post(inboxURL, "application/activity+json", bytes.NewReader(body))
 	if err != nil {
-		log.Printf("AcceptRemoteChallenge: POST to %s: %v", req.InboxURL, err)
+		log.Printf("AcceptRemoteChallenge: POST to %s: %v", inboxURL, err)
 		http.Error(w, fmt.Sprintf("failed to reach remote server: %v", err), http.StatusBadGateway)
 		return
 	}
@@ -626,10 +645,17 @@ func (h *Handler) AcceptRemoteChallenge(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Look up board size from the remote challenge
-	var boardSize int
-	if err := h.db.QueryRow("SELECT board_size FROM remote_challenges WHERE uri = $1", req.ChallengeURI).Scan(&boardSize); err != nil {
-		boardSize = 19 // fallback
+	// Verify the local actor is one of the two listed players
+	if att.Black != actorURI && att.White != actorURI {
+		http.Error(w, "remote server returned a game we are not part of", http.StatusBadGateway)
+		return
+	}
+
+	// Verify the WebSocket URL has a safe scheme to avoid open-redirect / XSS
+	wsURL, err := url.Parse(att.WebSocket)
+	if err != nil || (wsURL.Scheme != "ws" && wsURL.Scheme != "wss") {
+		http.Error(w, "remote server returned an invalid WebSocket URL", http.StatusBadGateway)
+		return
 	}
 
 	// Determine which color the local player is
