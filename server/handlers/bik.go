@@ -654,13 +654,17 @@ func (h *Handler) AcceptRemoteChallenge(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Remove the remote challenge from our list
-	h.db.Exec("DELETE FROM remote_challenges WHERE uri = $1", req.ChallengeURI)
+	if _, err := h.db.Exec("DELETE FROM remote_challenges WHERE uri = $1", req.ChallengeURI); err != nil {
+		log.Printf("AcceptRemoteChallenge: delete remote challenge: %v", err)
+	}
 
 	log.Printf("federation: accepted challenge %s → local game %d (remote %s)", req.ChallengeURI, localGameID, att.ID)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"gameId":      localGameID,
 		"remoteWsUrl": att.WebSocket,
-	})
+	}); err != nil {
+		log.Printf("AcceptRemoteChallenge: encode: %v", err)
+	}
 }

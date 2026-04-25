@@ -162,7 +162,13 @@ export function Federation() {
         >
           + Create Challenge
         </button>
-        <button onClick={() => { fetchChallenges(); fetchActiveGames(); }} className="refresh-btn">
+        <button
+          onClick={() => {
+            fetchChallenges();
+            fetchActiveGames();
+          }}
+          className="refresh-btn"
+        >
           Refresh
         </button>
       </div>
@@ -268,9 +274,7 @@ export function Federation() {
               >
                 <div className="challenge-header">
                   <span className="challenge-creator">Game #{game.id}</span>
-                  <span className="challenge-badge active-badge">
-                    Active
-                  </span>
+                  <span className="challenge-badge active-badge">Active</span>
                 </div>
                 <div className="challenge-details">
                   <span className="challenge-tag">

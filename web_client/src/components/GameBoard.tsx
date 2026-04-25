@@ -97,9 +97,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         if (!isRemote) {
           // Load existing moves via REST for local games
           try {
-            const res = await fetch(
-              `${API_URL}/api/v1/games/${game.id}/moves`,
-            );
+            const res = await fetch(`${API_URL}/api/v1/games/${game.id}/moves`);
             const moves = await res.json();
             if (moves && Array.isArray(moves)) {
               const newBoard = emptyBoard.map((row) => [...row]);
@@ -359,7 +357,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
       <div className="turn-indicator">
         {currentGame.status === "active" && (
           <span>
-            {nextToPlay === getMyColor() ? "Your turn" : `${nextToPlay} to play`}
+            {nextToPlay === getMyColor()
+              ? "Your turn"
+              : `${nextToPlay} to play`}
           </span>
         )}
       </div>

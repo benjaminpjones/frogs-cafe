@@ -66,7 +66,7 @@ func (h *Handler) ValidateAndSaveMove(gameIDStr string, playerID int, actorURI s
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Lock the game row and get game info + move count in one query
 	var blackPlayerID, whitePlayerID *int
