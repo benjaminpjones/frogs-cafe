@@ -557,4 +557,3 @@ func (h *Handler) GetBIKToken(w http.ResponseWriter, r *http.Request) {
 		log.Printf("GetBIKToken: encode: %v", err)
 	}
 }
-
