@@ -465,3 +465,7 @@ Signed tokens MUST include the `kid` of the signing key. When a verifying server
 - **Spectator federation**: Allow remote servers to subscribe to game updates
 - **Rating exchange**: Share rating information between trusted servers
 - **Tournament support**: Coordinate multi-game events across servers
+- **REST snapshot endpoint**: `GET /games/{uri}` returning the same `game_state`
+  shape as the WebSocket message. The WebSocket would still own live updates,
+  but a REST snapshot would support cacheable embeds, archive scrapers, link
+  previews, and other consumers that don't need a persistent connection.
