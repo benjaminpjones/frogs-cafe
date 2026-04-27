@@ -1,13 +1,11 @@
 package handlers
 
 import (
-	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	mathrand "math/rand"
 	"net/http"
@@ -560,137 +558,3 @@ func (h *Handler) GetBIKToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AcceptRemoteChallenge handles POST /api/v1/bik/challenges/accept
-// The local server proxies the Accept to the remote server's inbox on behalf of the user,
-// creates a local game record, and returns the local game ID.
-func (h *Handler) AcceptRemoteChallenge(w http.ResponseWriter, r *http.Request) {
-	playerID, _ := middleware.GetPlayerID(r)
-
-	var req struct {
-		ChallengeURI string `json:"challengeUri"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Look up the trusted inbox URL and board size from the stored remote challenge.
-	// Never trust a client-supplied inbox URL — that's an SSRF vector.
-	var inboxURL string
-	var boardSize int
-	if err := h.db.QueryRow(
-		"SELECT inbox_url, board_size FROM remote_challenges WHERE uri = $1",
-		req.ChallengeURI,
-	).Scan(&inboxURL, &boardSize); err != nil {
-		http.Error(w, "challenge not found", http.StatusNotFound)
-		return
-	}
-
-	var username string
-	if err := h.db.QueryRow("SELECT username FROM players WHERE id = $1", playerID).Scan(&username); err != nil {
-		http.Error(w, "failed to look up player", http.StatusInternalServerError)
-		return
-	}
-
-	actorURI := fmt.Sprintf("%s/users/%s", h.cfg.BaseURL, username)
-	acceptActivity := bik.Activity{
-		Context: bik.APContext,
-		Type:    "Accept",
-		Actor:   actorURI,
-		Object:  req.ChallengeURI,
-	}
-
-	body, err := json.Marshal(acceptActivity)
-	if err != nil {
-		http.Error(w, "failed to marshal activity", http.StatusInternalServerError)
-		return
-	}
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Post(inboxURL, "application/activity+json", bytes.NewReader(body))
-	if err != nil {
-		log.Printf("AcceptRemoteChallenge: POST to %s: %v", inboxURL, err)
-		http.Error(w, fmt.Sprintf("failed to reach remote server: %v", err), http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		http.Error(w, fmt.Sprintf("remote server returned %d: %s", resp.StatusCode, string(respBody)), resp.StatusCode)
-		return
-	}
-
-	// Parse the Create game activity from the remote server
-	var gameActivity struct {
-		Object struct {
-			Attachment struct {
-				Type      string `json:"type"`
-				ID        string `json:"id"`
-				Black     string `json:"black"`
-				White     string `json:"white"`
-				WebSocket string `json:"websocket"`
-			} `json:"attachment"`
-		} `json:"object"`
-	}
-	if err := json.Unmarshal(respBody, &gameActivity); err != nil {
-		log.Printf("AcceptRemoteChallenge: parse response: %v", err)
-		http.Error(w, "failed to parse game response", http.StatusBadGateway)
-		return
-	}
-
-	att := gameActivity.Object.Attachment
-	if att.Type != "BikGame" {
-		http.Error(w, "unexpected response from remote server", http.StatusBadGateway)
-		return
-	}
-
-	// Verify the local actor is one of the two listed players
-	if att.Black != actorURI && att.White != actorURI {
-		http.Error(w, "remote server returned a game we are not part of", http.StatusBadGateway)
-		return
-	}
-
-	// Verify the WebSocket URL has a safe scheme to avoid open-redirect / XSS
-	wsURL, err := url.Parse(att.WebSocket)
-	if err != nil || (wsURL.Scheme != "ws" && wsURL.Scheme != "wss") {
-		http.Error(w, "remote server returned an invalid WebSocket URL", http.StatusBadGateway)
-		return
-	}
-
-	// Determine which color the local player is
-	var localGameID int
-	if att.Black == actorURI {
-		err = h.db.QueryRow(`
-			INSERT INTO games (black_player_id, board_size, status, black_actor_uri, white_actor_uri, bik_challenge_uri, remote_game_uri, remote_ws_url)
-			VALUES ($1, $2, 'active', $3, $4, $5, $6, $7)
-			RETURNING id
-		`, playerID, boardSize, att.Black, att.White, req.ChallengeURI, att.ID, att.WebSocket).Scan(&localGameID)
-	} else {
-		err = h.db.QueryRow(`
-			INSERT INTO games (white_player_id, board_size, status, black_actor_uri, white_actor_uri, bik_challenge_uri, remote_game_uri, remote_ws_url)
-			VALUES ($1, $2, 'active', $3, $4, $5, $6, $7)
-			RETURNING id
-		`, playerID, boardSize, att.Black, att.White, req.ChallengeURI, att.ID, att.WebSocket).Scan(&localGameID)
-	}
-	if err != nil {
-		log.Printf("AcceptRemoteChallenge: create local game: %v", err)
-		http.Error(w, "failed to create local game record", http.StatusInternalServerError)
-		return
-	}
-
-	// Remove the remote challenge from our list
-	if _, err := h.db.Exec("DELETE FROM remote_challenges WHERE uri = $1", req.ChallengeURI); err != nil {
-		log.Printf("AcceptRemoteChallenge: delete remote challenge: %v", err)
-	}
-
-	log.Printf("federation: accepted challenge %s → local game %d (remote %s)", req.ChallengeURI, localGameID, att.ID)
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"gameId":      localGameID,
-		"remoteWsUrl": att.WebSocket,
-	}); err != nil {
-		log.Printf("AcceptRemoteChallenge: encode: %v", err)
-	}
-}

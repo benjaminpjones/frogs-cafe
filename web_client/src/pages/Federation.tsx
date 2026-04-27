@@ -11,8 +11,7 @@ export function Federation() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [accepting, setAccepting] = useState<string | null>(null);
-  const { player, token, setShowAuthModal } = useAuth();
+  const { token, setShowAuthModal } = useAuth();
   const navigate = useNavigate();
 
   // Create form state
@@ -87,42 +86,6 @@ export function Federation() {
       alert("Failed to create challenge.");
     } finally {
       setCreating(false);
-    }
-  };
-
-  const acceptChallenge = async (challenge: BIKChallenge) => {
-    if (!token || !player) {
-      setShowAuthModal(true);
-      return;
-    }
-
-    try {
-      setAccepting(challenge.uri);
-
-      // Ask our own server to proxy the Accept to the remote inbox
-      const response = await fetch(`${API_URL}/api/v1/bik/challenges/accept`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          challengeUri: challenge.uri,
-        }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "Failed to accept challenge");
-      }
-
-      const data = await response.json();
-      navigate(`/game/${data.gameId}`);
-    } catch (err) {
-      console.error("Error accepting challenge:", err);
-      alert(`Failed to accept challenge: ${err}`);
-    } finally {
-      setAccepting(null);
     }
   };
 
@@ -335,17 +298,6 @@ export function Federation() {
                       {challenge.colorAssignment}
                     </span>
                   </div>
-                  {challenge.remote && token && (
-                    <button
-                      className="accept-btn"
-                      disabled={accepting === challenge.uri}
-                      onClick={() => acceptChallenge(challenge)}
-                    >
-                      {accepting === challenge.uri
-                        ? "Accepting..."
-                        : "Accept Challenge"}
-                    </button>
-                  )}
                 </div>
               ))}
             </div>

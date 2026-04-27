@@ -130,7 +130,6 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAuth(db.DB))
 			r.Post("/bik/challenges", h.CreateBIKChallenge)
-			r.Post("/bik/challenges/accept", h.AcceptRemoteChallenge)
 			r.Post("/bik/token/{gameID}", h.GetBIKToken)
 		})
 	})

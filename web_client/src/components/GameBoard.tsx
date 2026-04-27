@@ -17,8 +17,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const currentGameRef = useRef<Game>(game);
   const { token, player } = useAuth();
 
-  const isRemote = !!game.remote_ws_url;
-
   useEffect(() => {
     currentGameRef.current = currentGame;
   }, [currentGame]);
@@ -71,58 +69,33 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     setBoard(emptyBoard);
 
     const connectWs = async () => {
-      let wsUrl: string;
-
-      if (isRemote && token) {
-        // Get a BIK token for the remote game
-        try {
-          const resp = await fetch(
-            `${API_URL}/api/v1/bik/token/${game.id}?gameURI=${encodeURIComponent(game.remote_game_uri!)}`,
-            {
-              method: "POST",
-              headers: { Authorization: `Bearer ${token}` },
-            },
-          );
-          const data = await resp.json();
-          wsUrl = `${game.remote_ws_url}?token=${data.token}`;
-        } catch (err) {
-          console.error("Failed to get BIK token:", err);
-          return;
-        }
-      } else if (isRemote) {
-        // Guest watching a remote game
-        wsUrl = game.remote_ws_url!;
-      } else {
-        // Local game
-        if (!isRemote) {
-          // Load existing moves via REST for local games
-          try {
-            const res = await fetch(`${API_URL}/api/v1/games/${game.id}/moves`);
-            const moves = await res.json();
-            if (moves && Array.isArray(moves)) {
-              const newBoard = emptyBoard.map((row) => [...row]);
-              moves.forEach((move: any) => {
-                const color = getColorForPlayer(move.player_id);
-                if (color) {
-                  newBoard[move.y][move.x] = color;
-                }
-              });
-              setBoard(newBoard);
-              setMoveCount(moves.length);
+      // Load existing moves via REST so the board renders before WS connects
+      try {
+        const res = await fetch(`${API_URL}/api/v1/games/${game.id}/moves`);
+        const moves = await res.json();
+        if (moves && Array.isArray(moves)) {
+          const newBoard = emptyBoard.map((row) => [...row]);
+          moves.forEach((move: any) => {
+            const color = getColorForPlayer(move.player_id);
+            if (color) {
+              newBoard[move.y][move.x] = color;
             }
-          } catch (err) {
-            console.error("Error loading moves:", err);
-          }
+          });
+          setBoard(newBoard);
+          setMoveCount(moves.length);
         }
-        wsUrl = token
-          ? `${WS_URL}/ws/games/${game.id}?token=${token}`
-          : `${WS_URL}/ws/games/${game.id}`;
+      } catch (err) {
+        console.error("Error loading moves:", err);
       }
+
+      const wsUrl = token
+        ? `${WS_URL}/ws/games/${game.id}?token=${token}`
+        : `${WS_URL}/ws/games/${game.id}`;
 
       const websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {
-        console.log("WebSocket connected", isRemote ? "(remote)" : "(local)");
+        console.log("WebSocket connected");
       };
 
       websocket.onmessage = (event) => {
@@ -214,14 +187,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     return () => {
       websocket?.close();
     };
-  }, [game.id, game.board_size, isRemote]);
+  }, [game.id, game.board_size]);
 
-  // Auth upgrade for local games
   useEffect(() => {
-    if (ws && ws.readyState === WebSocket.OPEN && token && !isRemote) {
+    if (ws && ws.readyState === WebSocket.OPEN && token) {
       ws.send(JSON.stringify({ type: "authenticate", data: { token } }));
     }
-  }, [token, ws, isRemote]);
+  }, [token, ws]);
 
   const handleIntersectionClick = (x: number, y: number) => {
     if (board.length === 0 || !board[y] || board[y][x]) return;
@@ -351,7 +323,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
           <span>
             Board Size: {currentGame.board_size}x{currentGame.board_size}
           </span>
-          {isRemote && <span className="remote-indicator">Federation</span>}
         </div>
       </div>
       <div className="turn-indicator">

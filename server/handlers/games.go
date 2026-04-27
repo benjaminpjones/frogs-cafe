@@ -404,9 +404,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 
 	var game models.Game
 	err = h.db.QueryRow(
-		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at, remote_game_uri, remote_ws_url FROM games WHERE id = $1",
+		"SELECT id, black_player_id, white_player_id, board_size, status, winner_id, creator_id, created_at, updated_at FROM games WHERE id = $1",
 		id,
-	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt, &game.RemoteGameURI, &game.RemoteWsURL)
+	).Scan(&game.ID, &game.BlackPlayerID, &game.WhitePlayerID, &game.BoardSize, &game.Status, &game.WinnerID, &game.CreatorID, &game.CreatedAt, &game.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Game not found", http.StatusNotFound)
