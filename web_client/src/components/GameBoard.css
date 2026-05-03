@@ -40,6 +40,13 @@
   color: white;
 }
 
+.turn-indicator {
+  text-align: center;
+  font-weight: 600;
+  color: #2d5016;
+  margin-bottom: 0.5rem;
+}
+
 .board-container {
   display: flex;
   justify-content: center;

@@ -73,9 +73,12 @@ func main() {
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
 
-	// CORS configuration for development
+	// CORS configuration — only allow any localhost origin in development
+	isDev := cfg.Environment == "development"
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			return isDev && strings.HasPrefix(origin, "http://localhost:")
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Game } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { API_URL, WS_URL } from "../config";
@@ -13,10 +13,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [moveCount, setMoveCount] = useState(0);
   const [currentGame, setCurrentGame] = useState<Game>(game);
+  const [nextToPlay, setNextToPlay] = useState<"black" | "white">("black");
   const currentGameRef = useRef<Game>(game);
   const { token, player } = useAuth();
 
-  // Keep ref in sync with state
   useEffect(() => {
     currentGameRef.current = currentGame;
   }, [currentGame]);
@@ -26,89 +26,132 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
   const boardSize = currentGame.board_size;
   const svgSize = (boardSize - 1) * cellSize + padding * 2;
 
-  // Determine which color the current player is
   const getMyColor = (): "black" | "white" | null => {
     if (!player) return null;
-    return getColorForPlayer(player.id);
-  };
-
-  // Determine color based on player ID
-  const getColorForPlayer = (playerId: number): "black" | "white" | null => {
-    // Use ref to get the latest game state
-    const latestGame = currentGameRef.current;
-    if (playerId === latestGame.black_player_id) return "black";
-    if (playerId === latestGame.white_player_id) return "white";
+    if (player.id === currentGameRef.current.black_player_id) return "black";
+    if (player.id === currentGameRef.current.white_player_id) return "white";
     return null;
   };
 
+  const getColorForPlayer = (playerId: number): "black" | "white" | null => {
+    const g = currentGameRef.current;
+    if (playerId === g.black_player_id) return "black";
+    if (playerId === g.white_player_id) return "white";
+    return null;
+  };
+
+  // Apply a list of BIK-format moves to a fresh board
+  const applyMoves = useCallback(
+    (moves: (number[] | null)[]) => {
+      const newBoard = Array(boardSize)
+        .fill(null)
+        .map(() => Array(boardSize).fill(null));
+      moves.forEach((move, i) => {
+        if (move === null) return; // pass
+        const color = i % 2 === 0 ? "black" : "white";
+        const [col, row] = move;
+        if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
+          newBoard[row][col] = color;
+        }
+      });
+      setBoard(newBoard);
+      setMoveCount(moves.length);
+      setNextToPlay(moves.length % 2 === 0 ? "black" : "white");
+    },
+    [boardSize],
+  );
+
   useEffect(() => {
     // Initialize empty board
-    const newBoard = Array(game.board_size)
+    const emptyBoard = Array(game.board_size)
       .fill(null)
       .map(() => Array(game.board_size).fill(null));
+    setBoard(emptyBoard);
 
-    // Load existing moves from the server
-    fetch(`${API_URL}/api/v1/games/${game.id}/moves`)
-      .then((res) => res.json())
-      .then((moves) => {
+    const connectWs = async () => {
+      // Load existing moves via REST so the board renders before WS connects
+      try {
+        const res = await fetch(`${API_URL}/api/v1/games/${game.id}/moves`);
+        const moves = await res.json();
         if (moves && Array.isArray(moves)) {
+          const newBoard = emptyBoard.map((row) => [...row]);
           moves.forEach((move: any) => {
-            // Determine color based on which player made the move
             const color = getColorForPlayer(move.player_id);
             if (color) {
               newBoard[move.y][move.x] = color;
             }
           });
+          setBoard(newBoard);
           setMoveCount(moves.length);
-        } else {
-          console.warn("Moves data is not an array:", moves);
-          setMoveCount(0);
         }
-      })
-      .catch((err) => console.error("Error loading moves:", err))
-      .finally(() => {
-        // Always set the board, even if fetch fails
-        setBoard(newBoard);
-      });
-
-    // Connect to WebSocket for all users (authenticated and guests)
-    // Token is optional - guests can watch games without authentication
-    const wsUrl = token
-      ? `${WS_URL}/ws?game_id=${game.id}&token=${token}`
-      : `${WS_URL}/ws?game_id=${game.id}`;
-
-    const websocket = new WebSocket(wsUrl);
-
-    websocket.onopen = () => {
-      console.log("WebSocket connected");
-    };
-
-    websocket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-
-      // Handle incoming moves from other players
-      if (message.type === "move" && message.data) {
-        const { x, y, player_id } = message.data;
-        const color = getColorForPlayer(player_id);
-
-        if (color) {
-          setBoard((prevBoard) => {
-            const newBoard = prevBoard.map((row) => [...row]);
-            newBoard[y][x] = color;
-            return newBoard;
-          });
-          setMoveCount((prevCount) => prevCount + 1);
-        } else {
-          console.warn(
-            `Unable to place stone: player ${player_id} not in this game`,
-          );
-        }
+      } catch (err) {
+        console.error("Error loading moves:", err);
       }
 
-      // Handle game status updates
-      if (message.type === "game_update" && message.data) {
-        if (message.data.game) {
-          // Update the game object with the correct player IDs from the message
+      const wsUrl = token
+        ? `${WS_URL}/ws/games/${game.id}?token=${token}`
+        : `${WS_URL}/ws/games/${game.id}`;
+
+      const websocket = new WebSocket(wsUrl);
+
+      websocket.onopen = () => {
+        console.log("WebSocket connected");
+      };
+
+      websocket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+
+        // BIK spec: game_state — full sync on connect
+        if (message.type === "game_state" && message.data) {
+          const { moves, boardSize: bs, nextToPlay: ntp } = message.data;
+          if (bs) {
+            setCurrentGame((g) => ({ ...g, board_size: bs }));
+          }
+          if (Array.isArray(moves)) {
+            applyMoves(moves);
+          }
+          if (ntp) setNextToPlay(ntp);
+        }
+
+        // BIK spec: move_played — incremental update
+        if (message.type === "move_played" && message.data) {
+          const { pos, color, moveNumber, nextToPlay: ntp } = message.data;
+          if (pos !== null && Array.isArray(pos)) {
+            const [col, row] = pos;
+            setBoard((prev) => {
+              const newBoard = prev.map((r) => [...r]);
+              if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
+                newBoard[row][col] = color;
+              }
+              return newBoard;
+            });
+          }
+          // Use authoritative moveNumber from server to avoid double-counting
+          // from optimistic updates
+          if (typeof moveNumber === "number") {
+            setMoveCount(moveNumber);
+          } else {
+            setMoveCount((c) => c + 1);
+          }
+          if (ntp) setNextToPlay(ntp);
+        }
+
+        // Legacy local format: move with player_id
+        if (message.type === "move" && message.data?.player_id) {
+          const { x, y, player_id } = message.data;
+          const color = getColorForPlayer(player_id);
+          if (color) {
+            setBoard((prev) => {
+              const newBoard = prev.map((r) => [...r]);
+              newBoard[y][x] = color;
+              return newBoard;
+            });
+            setMoveCount((c) => c + 1);
+          }
+        }
+
+        // Game status updates
+        if (message.type === "game_update" && message.data?.game) {
           const updatedGame = {
             ...message.data.game,
             black_player_id: message.data.black_player_id,
@@ -116,73 +159,65 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
             status: message.data.status,
           };
           setCurrentGame(updatedGame);
-          console.log(`Game #${updatedGame.id} started: ${updatedGame.status}`);
         }
-      }
+
+        if (message.type === "game_over" && message.data) {
+          setCurrentGame((g) => ({ ...g, status: "finished" }));
+        }
+      };
+
+      websocket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+
+      websocket.onclose = () => {
+        console.log("WebSocket disconnected");
+      };
+
+      setWs(websocket);
+
+      return websocket;
     };
 
-    websocket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
-
-    websocket.onclose = () => {
-      console.log("WebSocket disconnected");
-    };
-
-    setWs(websocket);
+    let websocket: WebSocket | undefined;
+    connectWs().then((ws) => {
+      websocket = ws;
+    });
 
     return () => {
-      websocket.close();
+      websocket?.close();
     };
-  }, [game.id, currentGame.board_size, WS_URL]);
+  }, [game.id, game.board_size]);
 
-  // Effect to upgrade WebSocket connection when user logs in
   useEffect(() => {
     if (ws && ws.readyState === WebSocket.OPEN && token) {
-      const authMessage = {
-        type: "authenticate",
-        data: { token },
-      };
-      ws.send(JSON.stringify(authMessage));
+      ws.send(JSON.stringify({ type: "authenticate", data: { token } }));
     }
   }, [token, ws]);
 
   const handleIntersectionClick = (x: number, y: number) => {
-    // Check if board is initialized and position is empty
-    if (board.length === 0 || !board[y] || board[y][x]) {
-      return;
-    }
+    if (board.length === 0 || !board[y] || board[y][x]) return;
 
-    // Get the color for the current player
     const myColor = getMyColor();
-    if (!myColor) {
-      console.error("You are not a player in this game");
-      return;
-    }
+    if (!myColor) return;
+    if (myColor !== nextToPlay) return;
 
-    // TODO: Check if it's this player's turn based on move count and color
-
-    // Send move via WebSocket with player_id
     if (ws && ws.readyState === WebSocket.OPEN) {
-      const moveMessage = {
-        type: "move",
-        data: { x, y, game_id: currentGame.id, player_id: player?.id },
-      };
-      ws.send(JSON.stringify(moveMessage));
+      // BIK spec format: pos is [col, row]
+      ws.send(JSON.stringify({ type: "move", data: { pos: [x, y] } }));
     }
 
-    // Update local board optimistically
+    // Optimistic update
     const newBoard = board.map((row) => [...row]);
     newBoard[y][x] = myColor;
     setBoard(newBoard);
     setMoveCount(moveCount + 1);
+    setNextToPlay(myColor === "black" ? "white" : "black");
   };
 
   const renderGridLines = () => {
     const lines = [];
-
     for (let i = 0; i < boardSize; i++) {
-      // Vertical lines
       lines.push(
         <line
           key={`v-${i}`}
@@ -194,8 +229,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
           strokeWidth="1"
         />,
       );
-
-      // Horizontal lines
       lines.push(
         <line
           key={`h-${i}`}
@@ -208,13 +241,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         />,
       );
     }
-
     return lines;
   };
 
   const renderStarPoints = () => {
     if (boardSize !== 19) return null;
-
     const starPoints = [
       [3, 3],
       [3, 9],
@@ -226,7 +257,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
       [15, 9],
       [15, 15],
     ];
-
     return starPoints.map(([x, y], idx) => (
       <circle
         key={`star-${idx}`}
@@ -240,7 +270,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
 
   const renderIntersections = () => {
     const intersections = [];
-
     for (let y = 0; y < boardSize; y++) {
       for (let x = 0; x < boardSize; x++) {
         intersections.push(
@@ -257,13 +286,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         );
       }
     }
-
     return intersections;
   };
 
   const renderStones = () => {
     const stones: JSX.Element[] = [];
-
     board.forEach((row, y) => {
       row.forEach((stone, x) => {
         if (stone) {
@@ -282,7 +309,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         }
       });
     });
-
     return stones;
   };
 
@@ -295,9 +321,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
             {currentGame.status}
           </span>
           <span>
-            Board Size: {currentGame.board_size}×{currentGame.board_size}
+            Board Size: {currentGame.board_size}x{currentGame.board_size}
           </span>
         </div>
+      </div>
+      <div className="turn-indicator">
+        {currentGame.status === "active" && (
+          <span>
+            {nextToPlay === getMyColor()
+              ? "Your turn"
+              : `${nextToPlay} to play`}
+          </span>
+        )}
       </div>
       <div className="board-container">
         <svg viewBox={`0 0 ${svgSize} ${svgSize}`} className="board-svg">

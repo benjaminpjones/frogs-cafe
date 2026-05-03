@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -210,10 +211,11 @@ func (h *Handler) sendGameState(client *Client, gameIDStr string) {
 		}
 	}
 
-	// Fetch game phase
+	// Fetch game phase and board size
 	var status string
-	if err := h.db.QueryRow("SELECT status FROM games WHERE id = $1", gameIDStr).Scan(&status); err != nil {
-		log.Printf("error fetching game status: %v", err)
+	var boardSize int
+	if err := h.db.QueryRow("SELECT status, board_size FROM games WHERE id = $1", gameIDStr).Scan(&status, &boardSize); err != nil {
+		log.Printf("error fetching game info: %v", err)
 	}
 	phase := status // active/finished map directly; waiting → active for simplicity
 
@@ -226,6 +228,7 @@ func (h *Handler) sendGameState(client *Client, gameIDStr string) {
 		"type": "game_state",
 		"data": map[string]interface{}{
 			"moves":      moves,
+			"boardSize":  boardSize,
 			"phase":      phase,
 			"nextToPlay": nextToPlay,
 			"clock": map[string]interface{}{
@@ -359,22 +362,19 @@ func (c *Client) readPump() {
 				continue
 			}
 
-			// Verify the client is actually a participant and it's their turn
-			canMove, err := hub.handler.canPlayerMove(c.gameID, c.playerID, c.actorURI)
-			if err != nil || !canMove {
-				log.Printf("Move rejected for %s in game %s: canMove=%v err=%v", c.userID, c.gameID, canMove, err)
-				reject := map[string]interface{}{
-					"type": "move_rejected",
-					"data": map[string]string{"reason": "not_your_turn"},
-				}
-				if b, err := json.Marshal(reject); err == nil {
-					c.send <- b
-				}
-				continue
-			}
-
 			if data, ok := msg["data"].(map[string]interface{}); ok {
-				moveNumber, err := hub.handler.SaveMove(c.gameID, c.playerID, c.actorURI, data)
+				moveNumber, err := hub.handler.ValidateAndSaveMove(c.gameID, c.playerID, c.actorURI, data)
+				if err == ErrNotYourTurn {
+					log.Printf("Move rejected for %s in game %s: not their turn", c.userID, c.gameID)
+					reject := map[string]interface{}{
+						"type": "move_rejected",
+						"data": map[string]string{"reason": "not_your_turn"},
+					}
+					if b, err := json.Marshal(reject); err == nil {
+						c.send <- b
+					}
+					continue
+				}
 				if err != nil {
 					log.Printf("Error saving move: %v", err)
 					continue
@@ -389,9 +389,11 @@ func (c *Client) readPump() {
 				}
 
 				// Build move_played broadcast per BIK spec
+				gameIDInt, _ := strconv.Atoi(c.gameID)
 				movePlayed := map[string]interface{}{
 					"type": "move_played",
 					"data": map[string]interface{}{
+						"game_id":    gameIDInt,
 						"pos":        data["pos"],
 						"moveNumber": moveNumber,
 						"color":      color,

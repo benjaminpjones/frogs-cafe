@@ -8,6 +8,7 @@ import { GamePage } from "./pages/GamePage";
 import { Chat } from "./pages/Chat";
 import { About } from "./pages/About";
 import { Player } from "./pages/Player";
+import { Federation } from "./pages/Federation";
 import "./App.css";
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
             <Route path="watch" element={<Watch />} />
             <Route path="game/:id" element={<GamePage />} />
             <Route path="chat" element={<Chat />} />
+            <Route path="federation" element={<Federation />} />
             <Route path="about" element={<About />} />
             <Route path="player/:username" element={<Player />} />
           </Route>

@@ -18,6 +18,7 @@ export function Layout() {
                 Play
               </NavLink>
               <NavLink to="/watch">Watch</NavLink>
+              <NavLink to="/federation">Federation</NavLink>
               <NavLink to="/chat">Chat</NavLink>
               <NavLink to="/about">About</NavLink>
             </nav>

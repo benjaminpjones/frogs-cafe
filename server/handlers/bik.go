@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
+	mathrand "math/rand"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -33,8 +37,11 @@ func (h *Handler) WellKnownWebFinger(w http.ResponseWriter, r *http.Request) {
 
 	var id int
 	err := h.db.QueryRow("SELECT id FROM players WHERE username = $1", username).Scan(&id)
-	if err != nil {
+	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
@@ -58,8 +65,11 @@ func (h *Handler) ActorDocument(w http.ResponseWriter, r *http.Request) {
 
 	var id int
 	err := h.db.QueryRow("SELECT id FROM players WHERE username = $1", username).Scan(&id)
-	if err != nil {
+	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
@@ -95,9 +105,38 @@ func (h *Handler) BIKInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify actor is from a known peer to prevent forged activities
+	if activity.Actor != "" {
+		actorURL, err := url.Parse(activity.Actor)
+		if err != nil || actorURL.Host == "" {
+			http.Error(w, "invalid actor URI", http.StatusBadRequest)
+			return
+		}
+		isPeer := false
+		for _, peer := range h.cfg.BIKPeers {
+			peerURL, err := url.Parse(peer)
+			if err != nil {
+				continue
+			}
+			if peerURL.Scheme == actorURL.Scheme && peerURL.Host == actorURL.Host {
+				isPeer = true
+				break
+			}
+		}
+		if !isPeer {
+			log.Printf("BIKInbox: rejected activity from unknown peer %s://%s", actorURL.Scheme, actorURL.Host)
+			http.Error(w, "actor not from a known peer", http.StatusForbidden)
+			return
+		}
+	}
+
 	switch activity.Type {
 	case "Accept":
 		h.handleChallengeAccept(w, r, activity)
+	case "Create":
+		h.handleRemoteCreate(w, r, activity)
+	case "Undo":
+		h.handleRemoteUndo(w, r, activity)
 	default:
 		http.Error(w, "unsupported activity type", http.StatusNotImplemented)
 	}
@@ -154,7 +193,7 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 		blackActor = acceptorActor
 		whiteActor = creatorActor
 	case "random":
-		if rand.Intn(2) == 0 {
+		if mathrand.Intn(2) == 0 {
 			blackActor = creatorActor
 			whiteActor = acceptorActor
 		} else {
@@ -195,7 +234,12 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 
 	// Build response: CreateGame activity
 	gameURI := fmt.Sprintf("%s/games/%s", h.cfg.BaseURL, gameID)
-	wsURL := fmt.Sprintf("%s/ws/games/%s", strings.Replace(h.cfg.BaseURL, "http", "ws", 1), gameID)
+	baseURL, _ := url.Parse(h.cfg.BaseURL)
+	wsScheme := "ws"
+	if baseURL.Scheme == "https" {
+		wsScheme = "wss"
+	}
+	wsURL := fmt.Sprintf("%s://%s/ws/games/%s", wsScheme, baseURL.Host, gameID)
 	gameActivity := bik.Activity{
 		Context: bik.APContext,
 		Type:    "Create",
@@ -225,11 +269,111 @@ func (h *Handler) handleChallengeAccept(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// handleRemoteCreate processes a Create activity from a peer — stores a remote challenge.
+func (h *Handler) handleRemoteCreate(w http.ResponseWriter, r *http.Request, activity bik.Activity) {
+	// Re-marshal and parse the object as a Note with BikChallenge attachment
+	objBytes, err := json.Marshal(activity.Object)
+	if err != nil {
+		http.Error(w, "invalid object", http.StatusBadRequest)
+		return
+	}
+
+	var note struct {
+		Type       string `json:"type"`
+		ID         string `json:"id"`
+		Attachment struct {
+			Type            string          `json:"type"`
+			BoardSize       int             `json:"boardSize"`
+			TimeControl     json.RawMessage `json:"timeControl"`
+			ColorAssignment string          `json:"colorAssignment"`
+			ExpiresAt       time.Time       `json:"expiresAt"`
+		} `json:"attachment"`
+	}
+	if err := json.Unmarshal(objBytes, &note); err != nil || note.Type != "Note" {
+		http.Error(w, "expected Note object", http.StatusBadRequest)
+		return
+	}
+	if note.Attachment.Type != "BikChallenge" {
+		http.Error(w, "expected BikChallenge attachment", http.StatusBadRequest)
+		return
+	}
+
+	// Discover the actor's inbox from their actor document
+	inboxURL := h.discoverInbox(activity.Actor)
+	if inboxURL == "" {
+		// Fall back: assume standard path
+		idx := strings.LastIndex(activity.Actor, "/users/")
+		if idx < 0 {
+			http.Error(w, "could not determine inbox URL for actor", http.StatusBadRequest)
+			return
+		}
+		inboxURL = activity.Actor[:idx] + "/bik/inbox"
+	}
+
+	_, err = h.db.Exec(`
+		INSERT INTO remote_challenges (uri, actor_uri, board_size, time_control, color_assignment, inbox_url, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (uri) DO NOTHING
+	`, note.ID, activity.Actor, note.Attachment.BoardSize, string(note.Attachment.TimeControl),
+		note.Attachment.ColorAssignment, inboxURL, note.Attachment.ExpiresAt)
+	if err != nil {
+		log.Printf("handleRemoteCreate: insert: %v", err)
+		http.Error(w, "failed to store challenge", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("federation: stored remote challenge %s from %s", note.ID, activity.Actor)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleRemoteUndo processes an Undo activity — removes a remote challenge.
+func (h *Handler) handleRemoteUndo(w http.ResponseWriter, r *http.Request, activity bik.Activity) {
+	challengeURI, ok := activity.Object.(string)
+	if !ok {
+		http.Error(w, "object must be a URI string", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.db.Exec("DELETE FROM remote_challenges WHERE uri = $1", challengeURI)
+	if err != nil {
+		log.Printf("handleRemoteUndo: delete: %v", err)
+		http.Error(w, "failed to remove challenge", http.StatusInternalServerError)
+		return
+	}
+	rows, _ := result.RowsAffected()
+	log.Printf("federation: undo challenge %s (deleted %d rows)", challengeURI, rows)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// discoverInbox fetches an actor document and returns the inbox URL.
+func (h *Handler) discoverInbox(actorURI string) string {
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest("GET", actorURI, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "application/activity+json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	var actor bik.Actor
+	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
+		return ""
+	}
+	return actor.Inbox
+}
+
 func (h *Handler) broadcastUndoChallenge(challengeURI, actor string) {
-	// TODO: deliver Undo activity to followers
-	// For now just log — full AP delivery is a future extension
-	_ = challengeURI
-	_ = actor
+	activity := bik.Activity{
+		Context: bik.APContext,
+		Type:    "Undo",
+		Actor:   actor,
+		Object:  challengeURI,
+	}
+	h.deliverToPeers(activity)
 }
 
 // CreateBIKChallenge handles POST /api/v1/bik/challenges
@@ -262,7 +406,12 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	challengeID := fmt.Sprintf("%d", time.Now().UnixNano())
+	var idBytes [16]byte
+	if _, err := rand.Read(idBytes[:]); err != nil {
+		http.Error(w, "failed to generate ID", http.StatusInternalServerError)
+		return
+	}
+	challengeID := hex.EncodeToString(idBytes[:])
 	challengeURI := fmt.Sprintf("%s/challenges/%s", h.cfg.BaseURL, challengeID)
 	expiresAt := time.Now().Add(time.Duration(req.ExpiresIn) * time.Second)
 
@@ -298,6 +447,9 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	// Push to peer servers
+	h.deliverToPeers(activity)
+
 	w.Header().Set("Content-Type", "application/activity+json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(activity); err != nil {
@@ -307,6 +459,20 @@ func (h *Handler) CreateBIKChallenge(w http.ResponseWriter, r *http.Request) {
 
 // ListBIKChallenges handles GET /api/v1/bik/challenges
 func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
+	type challengeItem struct {
+		URI             string          `json:"uri"`
+		Creator         string          `json:"creator"`
+		BoardSize       int             `json:"boardSize"`
+		TimeCtrl        json.RawMessage `json:"timeControl"`
+		ColorAssignment string          `json:"colorAssignment"`
+		ExpiresAt       time.Time       `json:"expiresAt"`
+		Remote          bool            `json:"remote"`
+		InboxURL        string          `json:"inboxUrl,omitempty"`
+	}
+
+	items := []challengeItem{}
+
+	// Local challenges
 	rows, err := h.db.Query(`
 		SELECT c.uri, p.username, c.board_size, c.time_control, c.color_assignment, c.expires_at
 		FROM bik_challenges c
@@ -320,16 +486,6 @@ func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	type challengeItem struct {
-		URI             string          `json:"uri"`
-		Creator         string          `json:"creator"`
-		BoardSize       int             `json:"boardSize"`
-		TimeCtrl        json.RawMessage `json:"timeControl"`
-		ColorAssignment string          `json:"colorAssignment"`
-		ExpiresAt       time.Time       `json:"expiresAt"`
-	}
-
-	items := []challengeItem{}
 	for rows.Next() {
 		var item challengeItem
 		var timeCtrlRaw []byte
@@ -339,6 +495,30 @@ func (h *Handler) ListBIKChallenges(w http.ResponseWriter, r *http.Request) {
 		}
 		item.TimeCtrl = json.RawMessage(timeCtrlRaw)
 		items = append(items, item)
+	}
+
+	// Remote challenges from peers
+	remoteRows, err := h.db.Query(`
+		SELECT uri, actor_uri, board_size, time_control, color_assignment, inbox_url, expires_at
+		FROM remote_challenges
+		WHERE expires_at > NOW()
+		ORDER BY received_at DESC
+	`)
+	if err != nil {
+		log.Printf("ListBIKChallenges: remote query: %v", err)
+	} else {
+		defer remoteRows.Close()
+		for remoteRows.Next() {
+			var item challengeItem
+			var timeCtrlRaw []byte
+			if err := remoteRows.Scan(&item.URI, &item.Creator, &item.BoardSize, &timeCtrlRaw, &item.ColorAssignment, &item.InboxURL, &item.ExpiresAt); err != nil {
+				log.Printf("ListBIKChallenges: scan remote: %v", err)
+				continue
+			}
+			item.TimeCtrl = json.RawMessage(timeCtrlRaw)
+			item.Remote = true
+			items = append(items, item)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -10,11 +11,21 @@ type Config struct {
 	Port          string
 	JWTSecret     string
 	Environment   string
-	BaseURL       string // e.g. https://frogs.cafe — used for actor URIs and AP activities
-	BIKPrivateKey string // PEM-encoded Ed25519 private key for signing BIK tokens
+	BaseURL       string   // e.g. https://frogs.cafe — used for actor URIs and AP activities
+	BIKPrivateKey string   // PEM-encoded Ed25519 private key for signing BIK tokens
+	BIKPeers      []string // URLs of known peer servers for federation
 }
 
 func Load() *Config {
+	var peers []string
+	if p := os.Getenv("BIK_PEERS"); p != "" {
+		for _, s := range strings.Split(p, ",") {
+			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				peers = append(peers, trimmed)
+			}
+		}
+	}
+
 	cfg := &Config{
 		DatabaseURL:   getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/frogs_cafe?sslmode=disable"),
 		Port:          getEnv("PORT", "8080"),
@@ -22,6 +33,7 @@ func Load() *Config {
 		Environment:   getEnv("ENVIRONMENT", "development"),
 		BaseURL:       getEnv("BASE_URL", "http://localhost:8080"),
 		BIKPrivateKey: getEnv("BIK_PRIVATE_KEY", ""),
+		BIKPeers:      peers,
 	}
 
 	log.Printf("Configuration loaded - running in %s mode", cfg.Environment)

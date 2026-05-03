@@ -65,3 +65,19 @@ export interface LoginRequest {
   username: string;
   password: string;
 }
+
+export interface BIKChallenge {
+  uri: string;
+  creator: string;
+  boardSize: number;
+  timeControl: {
+    system: string;
+    mainTime?: number;
+    periods?: number;
+    periodTime?: number;
+  };
+  colorAssignment: string;
+  expiresAt: string;
+  remote?: boolean;
+  inboxUrl?: string;
+}
